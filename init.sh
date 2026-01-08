@@ -17,6 +17,8 @@ sudo sysctl fs.inotify.max_user_instances=512
 
 kind create cluster --image kindest/node:v1.35.0
 
+kind apply -f cert-manager.yaml --name kind-kind
+
 make install 
 
 make run
@@ -41,3 +43,5 @@ make docker-build docker-push IMG=accesserator:v0.0.5
 kind load docker-image accesserator:v0.0.6 --name kind-kind
 
 make deploy IMG=accesserator:v0.0.6
+
+kubectl apply -f examples/pod.yaml

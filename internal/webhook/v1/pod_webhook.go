@@ -20,11 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // nolint:unused
@@ -33,13 +34,21 @@ var podlog = logf.Log.WithName("pod-resource")
 
 // SetupPodWebhookWithManager registers the webhook for Pod in the manager.
 func SetupPodWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&v1.Pod{}).
+	return ctrl.NewWebhookManagedBy(mgr).For(&corev1.Pod{}).
+		WithValidator(&PodCustomValidator{}).
 		WithDefaulter(&PodCustomDefaulter{}).
-		WithDefaulterCustomPath("/mutate-pod").
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/mutate-pod,mutating=true,failurePolicy=fail,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=mpod-v1.kb.io,admissionReviewVersions=v1,matchPolicy=Equivalent
+// TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+
+// +kubebuilder:webhook:path=/mutate--v1-pod,mutating=true,failurePolicy=fail,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=mpod-v1.kb.io,admissionReviewVersions=v1
+
+// PodCustomDefaulter struct is responsible for setting default values on the custom resource of the
+// Kind Pod when those are created or updated.
+//
+// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
 type PodCustomDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
@@ -48,14 +57,82 @@ var _ webhook.CustomDefaulter = &PodCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Pod.
 func (d *PodCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	pod, ok := obj.(*v1.Pod)
+	pod, ok := obj.(*corev1.Pod)
 
 	if !ok {
 		return fmt.Errorf("expected an Pod object but got %T", obj)
 	}
 	podlog.Info("Defaulting for Pod", "name", pod.GetName())
 
-	pod.Labels["accesserator"] = "washere"
+	// Add label to identify pods processed by accesserator
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels["accesserator"] = "washerenot"
 
 	return nil
+}
+
+// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
+// NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
+// +kubebuilder:webhook:path=/validate--v1-pod,mutating=false,failurePolicy=fail,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=vpod-v1.kb.io,admissionReviewVersions=v1
+
+// PodCustomValidator struct is responsible for validating the Pod resource
+// when it is created, updated, or deleted.
+//
+// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
+// as this struct is used only for temporary operations and does not need to be deeply copied.
+type PodCustomValidator struct {
+	// TODO(user): Add more fields as needed for validation
+}
+
+var _ webhook.CustomValidator = &PodCustomValidator{}
+
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type Pod.
+func (v *PodCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("expected a Pod object but got %T", obj)
+	}
+	podlog.Info("Validation for Pod upon creation", "name", pod.GetName())
+
+	if pod.Labels == nil {
+		return nil, fmt.Errorf("expected a Pod with a label 'washere'%T", obj)
+	}
+
+	if _, ok := pod.Labels["accesserator"]; !ok {
+		return nil, fmt.Errorf("expected a Pod with a key 'accesserator' but it was not found")
+	}
+	labelValue := pod.Labels["accesserator"]
+	if labelValue != "washere" {
+		return nil, fmt.Errorf("expected a Pod with label 'accesserator=washere' but got 'accesserator=%s'", labelValue)
+	}
+
+	return nil, nil
+}
+
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type Pod.
+func (v *PodCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	pod, ok := newObj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("expected a Pod object for the newObj but got %T", newObj)
+	}
+	podlog.Info("Validation for Pod upon update", "name", pod.GetName())
+
+	// TODO(user): fill in your validation logic upon object update.
+
+	return nil, nil
+}
+
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type Pod.
+func (v *PodCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("expected a Pod object but got %T", obj)
+	}
+	podlog.Info("Validation for Pod upon deletion", "name", pod.GetName())
+
+	// TODO(user): fill in your validation logic upon object deletion.
+
+	return nil, nil
 }
