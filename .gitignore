@@ -36,8 +36,10 @@ go.work.sum
 cover.out
 
 # env file
-.env
+.env*
 
-# Editor/IDE
+# env file
+bin/
 .idea/
-.vscode/
+istio-*
+!**/istio/
