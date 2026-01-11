@@ -19,7 +19,7 @@ command -v "${KUBECTL_BIN}" >/dev/null 2>&1 || {
 # kind cluster exists
 if ! "${KIND_BIN}" get clusters 2>/dev/null | grep -qx "${KIND_CLUSTER_NAME}"; then
   echo "❌  Kind cluster '${KIND_CLUSTER_NAME}' is not running." >&2
-  echo "    Create it with: make cluster" >&2
+  echo "    Set up local environment with: make local" >&2
   exit 1
 fi
 
@@ -27,7 +27,7 @@ fi
 ctx="$("${KUBECTL_BIN}" config current-context 2>/dev/null || true)"
 if [[ "${ctx}" != "${KUBECONTEXT}" ]]; then
   echo "❌  Current kubecontext is '${ctx}' (expected '${KUBECONTEXT}')." >&2
-  echo "    Switch with: kubectl config use-context ${KUBECONTEXT}" >&2
+  echo "    Switch with: kubectx ${KUBECONTEXT}" >&2
   exit 1
 fi
 
