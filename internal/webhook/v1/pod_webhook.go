@@ -121,7 +121,8 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 		podlog.Info(message, "name", appName)
 		return nil
 	} else if len(securityConfigForApplication) > 1 {
-		return fmt.Errorf("multiple SecurityConfig resources found for Application %s", appName)
+		// This is an unwanted state because multiple SecurityConfigs cannot target the same Application. Validating webhook will fail for this case.
+		podlog.Info("multiple SecurityConfig resources found for Application", "name", appName)
 	}
 	securityConfig := securityConfigForApplication[0]
 
