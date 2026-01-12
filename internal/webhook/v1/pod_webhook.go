@@ -157,6 +157,15 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 			},
 			EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: expectedJwkerSecretName}}}},
 		})
+
+		for i := range pod.Spec.Containers {
+			if pod.Spec.Containers[i].Name == appName {
+				pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{
+					Name:  "TEXAS_URL",
+					Value: "http://localhost:3000",
+				})
+			}
+		}
 	}
 
 	return nil
