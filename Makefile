@@ -177,7 +177,7 @@ webhooks: kustomize ## Install mutating and validating webhook into the K8s clus
 	$(KUBECTL) --context $(KUBECONTEXT) patch validatingwebhookconfiguration accesserator-validating-webhook-configuration --type='json' -p="[{\"op\":\"replace\",\"path\":\"/webhooks/0/clientConfig/caBundle\",\"value\":\"$$CABUNDLE\"}]"
 
 .PHONY: install
-install: ensureflox manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	@out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply -f -; else echo "No CRDs to install; skipping."; fi
 

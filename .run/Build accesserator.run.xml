@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Build accesserator" type="MAKEFILE_TARGET_RUN_CONFIGURATION" factoryName="Makefile">
-    <makefile filename="$PROJECT_DIR$/Makefile" target="ensurelocal webhooks build" workingDirectory="$PROJECT_DIR$" arguments="">
+    <makefile filename="$PROJECT_DIR$/Makefile" target="ensurelocal webhooks build install" workingDirectory="$PROJECT_DIR$" arguments="">
       <envs />
     </makefile>
     <method v="2" />
