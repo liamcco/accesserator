@@ -20,21 +20,31 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SecurityConfigSpec defines the desired state of SecurityConfig
+// SecurityConfigSpec defines the desired state of SecurityConfig.
 type SecurityConfigSpec struct {
-	// Tokenx indicates whether a sidecar is started with the application referred to by `applicationRef`
-	// that provides an endpoint which is available to the application on the env var TOKENX_URL
+	// Tokenx indicates whether a sidecar (called Texas) is started with the application referred to by `applicationRef`
+	// that provides an endpoint which is available to the application on the env var TEXAS_URL.
 	// The endpoint conforms to the OAuth 2.0 Token Exchange standard (RFC 8693).
 	// accessPolicies in the Application manifest of the application referred to by applicationRef
 	// will be used to restrict which applications can exchange tokens where the specified application is the intended audience.
 	//
 	// +kubebuilder:validation:Optional
-	Tokenx *bool `json:"tokenx,omitempty"`
+	Tokenx *TokenXSpec `json:"tokenx,omitempty"`
 
 	// ApplicationRef is a reference to the name of the SKIP application for which this SecurityConfig applies.
 	//
 	// +kubebuilder:validation:Required
 	ApplicationRef string `json:"applicationRef,omitempty"`
+}
+
+// TokenXSpec defines the configuration for token exchange sidecar.
+//
+// +kubebuilder:object:generate=true
+type TokenXSpec struct {
+	// Enabled indicates whether the TokenX sidecar should be included for the application.
+	//
+	// +kubebuilder:validation:Required
+	Enabled bool `json:"enabled"`
 }
 
 // SecurityConfigStatus defines the observed state of SecurityConfig.

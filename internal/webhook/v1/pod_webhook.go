@@ -126,7 +126,7 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 	}
 	securityConfig := securityConfigForApplication[0]
 
-	if securityConfig.Spec.Tokenx != nil && *securityConfig.Spec.Tokenx {
+	if securityConfig.Spec.Tokenx != nil && securityConfig.Spec.Tokenx.Enabled {
 		// TokenX is enabled for this Application
 		// We inject an init container with texas in the pod
 		expectedJwkerSecretName := fmt.Sprintf("%s-jwker-secret", appName)

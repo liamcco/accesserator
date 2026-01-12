@@ -29,7 +29,8 @@ metadata:
   name: security-config
   namespace: test
 spec:
-  tokenx: true
+  tokenx:
+    enabled: true
   applicationRef: app
 ---
 apiVersion: nais.io/v1
