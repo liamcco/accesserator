@@ -22,7 +22,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kartverket/accesserator/pkg/config"
 	"github.com/kartverket/skiperator/api/v1alpha1"
+	naisiov1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -53,6 +56,7 @@ func init() {
 
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(accesseratorv1alpha.AddToScheme(scheme))
+	utilruntime.Must(naisiov1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -190,6 +194,11 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	if configLoadErr := config.Load(); configLoadErr != nil {
+		setupLog.Error(configLoadErr, "unable to load config")
 		os.Exit(1)
 	}
 
