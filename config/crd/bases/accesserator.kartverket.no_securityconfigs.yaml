@@ -14,7 +14,11 @@ spec:
     singular: securityconfig
   scope: Namespaced
   versions:
-  - name: v1alpha
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    name: v1alpha
     schema:
       openAPIV3Schema:
         description: SecurityConfig is the Schema for the securityconfigs API
@@ -65,16 +69,6 @@ spec:
             description: status defines the observed state of SecurityConfig
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the SecurityConfig resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -130,9 +124,17 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
+              message:
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                type: string
+              ready:
+                type: boolean
+            required:
+            - ready
             type: object
         required:
         - spec

@@ -49,29 +49,25 @@ type TokenXSpec struct {
 
 // SecurityConfigStatus defines the observed state of SecurityConfig.
 type SecurityConfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the SecurityConfig resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	Phase              Phase              `json:"phase,omitempty"`
+	Message            string             `json:"message,omitempty"`
+	Ready              bool               `json:"ready"`
 }
+
+type Phase string
+
+const (
+	PhasePending Phase = "Pending"
+	PhaseReady   Phase = "Ready"
+	PhaseFailed  Phase = "Failed"
+	PhaseInvalid Phase = "Invalid"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
 
 // SecurityConfig is the Schema for the securityconfigs API
 type SecurityConfig struct {
@@ -101,4 +97,13 @@ type SecurityConfigList struct {
 
 func init() {
 	SchemeBuilder.Register(&SecurityConfig{}, &SecurityConfigList{})
+}
+
+func (s *SecurityConfig) InitializeStatus() {
+	if s.Status.Conditions == nil {
+		s.Status.Conditions = []metav1.Condition{}
+	}
+	s.Status.ObservedGeneration = s.ObjectMeta.GetGeneration()
+	s.Status.Ready = false
+	s.Status.Phase = PhasePending
 }
