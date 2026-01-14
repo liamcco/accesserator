@@ -20,34 +20,43 @@ spec:
   accessPolicy:
     outbound:
       rules:
-        - application: tokendings
-          namespace: obo
+        - application: another-app
+---
+apiVersion: skiperator.kartverket.no/v1alpha1
+kind: Application
+metadata:
+  name: another-app
+  namespace: test
+  labels:
+    skiperator/security: "enabled"
+spec:
+  image: nginxinc/nginx-unprivileged:latest
+  port: 8080
+  replicas: 1
+  accessPolicy:
+    inbound:
+      rules:
+        - application: app
+    outbound:
+      external:
+        - host: nrk.no
 ---
 apiVersion: accesserator.kartverket.no/v1alpha
 kind: SecurityConfig
 metadata:
-  name: security-config
+  name: security-config-app
   namespace: test
 spec:
   tokenx:
     enabled: true
   applicationRef: app
 ---
-apiVersion: nais.io/v1
-kind: Jwker
+apiVersion: accesserator.kartverket.no/v1alpha
+kind: SecurityConfig
 metadata:
-  name: app-jwker
+  name: security-config-another-app
   namespace: test
 spec:
-  accessPolicy:
-    inbound:
-      rules:
-        - application: app-jwker
-          namespace: test
-          cluster: kind-accesserator
-    outbound:
-      rules:
-        - application: app-jwker
-          namespace: test
-          cluster: kind-accesserator
-  secretName: app-jwker-secret
+  tokenx:
+    enabled: true
+  applicationRef: another-app
