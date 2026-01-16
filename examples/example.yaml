@@ -37,9 +37,6 @@ spec:
     inbound:
       rules:
         - application: app
-    outbound:
-      external:
-        - host: nrk.no
 ---
 apiVersion: accesserator.kartverket.no/v1alpha
 kind: SecurityConfig
