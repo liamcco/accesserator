@@ -107,3 +107,51 @@ func (s *SecurityConfig) InitializeStatus() {
 	s.Status.Ready = false
 	s.Status.Phase = PhasePending
 }
+
+func (s *SecurityConfigStatus) SetPhaseInvalid(msg string) {
+	s.Phase = PhaseInvalid
+	s.Ready = false
+	s.Message = msg
+}
+
+func SetConditionInvalid(cond *metav1.Condition, msg string) {
+	cond.Status = metav1.ConditionFalse
+	cond.Reason = "InvalidConfiguration"
+	cond.Message = msg
+}
+
+func (s *SecurityConfigStatus) SetPhasePending(msg string) {
+	s.Phase = PhasePending
+	s.Ready = false
+	s.Message = msg
+}
+
+func SetConditionPending(cond *metav1.Condition, msg string) {
+	cond.Status = metav1.ConditionUnknown
+	cond.Reason = "ReconciliationPending"
+	cond.Message = msg
+}
+
+func (s *SecurityConfigStatus) SetPhaseFailed(msg string) {
+	s.Phase = PhaseFailed
+	s.Ready = false
+	s.Message = msg
+}
+
+func SetConditionFailed(cond *metav1.Condition, msg string) {
+	cond.Status = metav1.ConditionFalse
+	cond.Reason = "ReconciliationFailed"
+	cond.Message = msg
+}
+
+func (s *SecurityConfigStatus) SetPhaseReady(msg string) {
+	s.Phase = PhaseReady
+	s.Ready = true
+	s.Message = msg
+}
+
+func SetConditionReady(cond *metav1.Condition, msg string) {
+	cond.Status = metav1.ConditionTrue
+	cond.Reason = "ReconciliationSuccess"
+	cond.Message = msg
+}
