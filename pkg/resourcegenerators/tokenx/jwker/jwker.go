@@ -5,35 +5,35 @@ import (
 	"github.com/kartverket/accesserator/pkg/config"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1/podtypes"
-	nais_io_v1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
+	naisiov1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *nais_io_v1.Jwker {
+func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *naisiov1.Jwker {
 	if !scope.TokenXConfig.Enabled {
 		return nil
 	}
-	return &nais_io_v1.Jwker{
+	return &naisiov1.Jwker{
 		ObjectMeta: objectMeta,
-		Spec: nais_io_v1.JwkerSpec{
+		Spec: naisiov1.JwkerSpec{
 			SecretName:   utilities.GetJwkerSecretName(objectMeta.Name),
 			AccessPolicy: getNaisIoV1AccessPolicy(scope.TokenXConfig.AccessPolicy, scope.SecurityConfig.Namespace),
 		},
 	}
 }
 
-func getNaisIoV1AccessPolicy(skiperatorAccessPolicy *podtypes.AccessPolicy, securityConfigNamespace string) *nais_io_v1.AccessPolicy {
+func getNaisIoV1AccessPolicy(skiperatorAccessPolicy *podtypes.AccessPolicy, securityConfigNamespace string) *naisiov1.AccessPolicy {
 	if skiperatorAccessPolicy == nil {
 		return nil
 	}
 
-	naisIoV1AccessPolicyInboundRules := nais_io_v1.AccessPolicyInboundRules{}
-	naisIoV1AccessPolicyOutboundRules := nais_io_v1.AccessPolicyRules{}
+	naisIoV1AccessPolicyInboundRules := naisiov1.AccessPolicyInboundRules{}
+	naisIoV1AccessPolicyOutboundRules := naisiov1.AccessPolicyRules{}
 	if skiperatorAccessPolicy.Inbound != nil {
 		for _, rule := range skiperatorAccessPolicy.Inbound.Rules {
 			naisIoV1AccessPolicyInboundRules = append(
 				naisIoV1AccessPolicyInboundRules,
-				nais_io_v1.AccessPolicyInboundRule{
+				naisiov1.AccessPolicyInboundRule{
 					AccessPolicyRule: getNaisIoV1AccessPolicyRule(rule, securityConfigNamespace),
 				},
 			)
@@ -46,24 +46,24 @@ func getNaisIoV1AccessPolicy(skiperatorAccessPolicy *podtypes.AccessPolicy, secu
 		)
 	}
 
-	return &nais_io_v1.AccessPolicy{
-		Inbound: &nais_io_v1.AccessPolicyInbound{
+	return &naisiov1.AccessPolicy{
+		Inbound: &naisiov1.AccessPolicyInbound{
 			Rules: naisIoV1AccessPolicyInboundRules,
 		},
-		Outbound: &nais_io_v1.AccessPolicyOutbound{
+		Outbound: &naisiov1.AccessPolicyOutbound{
 			Rules: naisIoV1AccessPolicyOutboundRules,
 		},
 	}
 }
 
-func getNaisIoV1AccessPolicyRule(skiperatorAccessPolicyRule podtypes.InternalRule, securityConfigNamespace string) nais_io_v1.AccessPolicyRule {
+func getNaisIoV1AccessPolicyRule(skiperatorAccessPolicyRule podtypes.InternalRule, securityConfigNamespace string) naisiov1.AccessPolicyRule {
 	var accessPolicyNamespace string
 	if skiperatorAccessPolicyRule.Namespace != "" {
 		accessPolicyNamespace = skiperatorAccessPolicyRule.Namespace
 	} else {
 		accessPolicyNamespace = securityConfigNamespace
 	}
-	return nais_io_v1.AccessPolicyRule{
+	return naisiov1.AccessPolicyRule{
 		Application: skiperatorAccessPolicyRule.Application,
 		Namespace:   accessPolicyNamespace,
 		Cluster:     config.Get().ClusterName,
