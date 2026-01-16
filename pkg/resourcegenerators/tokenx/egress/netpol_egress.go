@@ -13,7 +13,8 @@ func GetDesired(objectMeta metav1.ObjectMeta, scope state.Scope) *v1.NetworkPoli
 	}
 
 	// fromNamespace is implicitly the namespace where the egress is created
-	fromApp := scope.SecurityConfig.Name
+	// fromApp is the application referenced in SecurityConfig
+	fromApp := scope.SecurityConfig.Spec.ApplicationRef
 
 	toNamespace := config.Get().TokenxNamespace
 	toApp := config.Get().TokenxName
