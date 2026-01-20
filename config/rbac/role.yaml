@@ -39,7 +39,7 @@ rules:
 - apiGroups:
   - nais.io
   resources:
-  - jwker
+  - jwkers
   verbs:
   - create
   - delete

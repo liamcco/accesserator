@@ -66,7 +66,7 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=accesserator.kartverket.no,resources=securityconfigs/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create
 // +kubebuilder:rbac:groups=skiperator.kartverket.no,resources=applications,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nais.io,resources=jwker,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=nais.io,resources=jwkers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
