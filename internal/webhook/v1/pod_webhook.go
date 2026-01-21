@@ -243,6 +243,24 @@ func getTexasContainer(securityConfigName string) corev1.Container {
 		// NOTE: RestartPolicy Always is only avaiable for init containers in Kubernetes v1.33+
 		// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#detailed-behavior
 		RestartPolicy: utilities.Ptr(corev1.ContainerRestartPolicyAlways),
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: utilities.Ptr(false),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{
+					"ALL",
+				},
+				Add: []corev1.Capability{
+					"NET_BIND_SERVICE",
+				},
+			},
+			Privileged:             utilities.Ptr(false),
+			ReadOnlyRootFilesystem: utilities.Ptr(true),
+			RunAsGroup:             utilities.Ptr(int64(150)),
+			RunAsNonRoot:           utilities.Ptr(true),
+			RunAsUser:              utilities.Ptr(int64(150)),
+		},
+		TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+		TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		Env: []corev1.EnvVar{
 			{
 				Name:  TokenXEnabledEnvVarName,
@@ -340,7 +358,10 @@ func isTexasContainerEqual(expected, actual corev1.Container) bool {
 		!reflect.DeepEqual(expected.RestartPolicy, actual.RestartPolicy) ||
 		!reflect.DeepEqual(expected.Env, actual.Env) ||
 		!reflect.DeepEqual(expected.EnvFrom, actual.EnvFrom) ||
-		!reflect.DeepEqual(expected.Ports, actual.Ports) {
+		!reflect.DeepEqual(expected.Ports, actual.Ports) ||
+		!reflect.DeepEqual(expected.SecurityContext, actual.SecurityContext) ||
+		!reflect.DeepEqual(expected.TerminationMessagePath, actual.TerminationMessagePath) ||
+		!reflect.DeepEqual(expected.TerminationMessagePolicy, actual.TerminationMessagePolicy) {
 		isEqual = false
 	}
 	return isEqual
