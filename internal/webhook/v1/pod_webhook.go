@@ -210,7 +210,13 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 
 	securityConfig := &securityConfigForApplication[0]
 
-	texasContainer := getTexasContainer(securityConfig.Name)
+	if securityConfig == nil {
+		msg := "SecurityConfig resource for Application was nil"
+		podlog.Info(msg, "name", appName)
+		return nil, fmt.Errorf("%s", msg)
+	}
+
+	texasContainer := getTexasContainer(*securityConfig)
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
@@ -220,14 +226,14 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	}, nil
 }
 
-func getTexasContainer(securityConfigName string) corev1.Container {
+func getTexasContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 	texasImageUrl := fmt.Sprintf(
 		"%s:%s",
 		config.Get().TexasImageName,
 		config.Get().TexasImageTag,
 	)
 	expectedJwkerSecretName := utilities.GetJwkerSecretName(
-		utilities.GetJwkerName(securityConfigName),
+		utilities.GetJwkerName(securityConfig.Spec.ApplicationRef),
 	)
 
 	return corev1.Container{

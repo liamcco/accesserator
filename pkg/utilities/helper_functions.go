@@ -33,8 +33,8 @@ func LowestNonZeroResult(i, j ctrl.Result) ctrl.Result {
 	}
 }
 
-func GetJwkerName(securityConfigName string) string {
-	return fmt.Sprintf("%s-%s", securityConfigName, JwkerNameSuffix)
+func GetJwkerName(applicationRef string) string {
+	return applicationRef
 }
 
 func GetJwkerSecretName(jwkerName string) string {
@@ -43,8 +43,4 @@ func GetJwkerSecretName(jwkerName string) string {
 
 func GetTokenxEgressName(securityConfigName string, tokenxConfigName string) string {
 	return fmt.Sprintf("%s-%s-%s", securityConfigName, tokenxConfigName, EgressNameSuffix)
-}
-
-func GetTokenxIngressName(securityConfigName string, tokenxConfigName string) string {
-	return fmt.Sprintf("%s-%s-%s", tokenxConfigName, securityConfigName, IngressNameSuffix)
 }

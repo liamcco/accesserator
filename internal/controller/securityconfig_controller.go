@@ -112,7 +112,7 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	jwkerObjectMeta := metav1.ObjectMeta{
-		Name:      utilities.GetJwkerName(securityConfig.Name),
+		Name:      utilities.GetJwkerName(securityConfig.Spec.ApplicationRef),
 		Namespace: securityConfig.Namespace,
 	}
 
@@ -252,10 +252,10 @@ func (r *SecurityConfigReconciler) updateStatus(
 				getJwkerErr,
 				fmt.Sprintf(
 					"Failed to get Jwker resource with name %s when updating SecurityConfig status",
-					utilities.GetJwkerName(securityConfig.Kind),
+					utilities.GetJwkerName(securityConfig.Spec.ApplicationRef),
 				),
 			)
-			r.Recorder.Eventf(&securityConfig, "Error", "StatusUpdateFailed", "Failed to get Jwker resource with name %s.", utilities.GetJwkerName(securityConfig.Kind))
+			r.Recorder.Eventf(&securityConfig, "Error", "StatusUpdateFailed", "Failed to get Jwker resource with name %s.", utilities.GetJwkerName(securityConfig.Spec.ApplicationRef))
 		}
 		if jwkerResource.Status.SynchronizationState != "RolloutComplete" {
 			securityConfig.Status.SetPhasePending("SecurityConfig pending due to missing TokenX secret.")

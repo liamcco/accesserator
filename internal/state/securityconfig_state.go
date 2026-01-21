@@ -84,7 +84,7 @@ func (s *Scope) GetJwker(ctx context.Context, k8sClient client.Client) (*nais_io
 	if k8sClient == nil {
 		return nil, fmt.Errorf("k8sClient not configured")
 	}
-	jwkerName := utilities.GetJwkerName(s.SecurityConfig.Name)
+	jwkerName := utilities.GetJwkerName(s.SecurityConfig.Spec.ApplicationRef)
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Name:      jwkerName,
 		Namespace: s.SecurityConfig.Namespace,

@@ -1,8 +1,6 @@
 package utilities
 
 const (
-	JwkerNameSuffix       = "jwker"
-	JwkerSecretNameSuffix = "secret"
+	JwkerSecretNameSuffix = "jwker-secret"
 	EgressNameSuffix      = "egress"
-	IngressNameSuffix     = "ingress"
 )
