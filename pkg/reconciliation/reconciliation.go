@@ -231,12 +231,13 @@ func ReconcileControllerResource[T client.Object](
 				deReferencedDesired.GetName(),
 			),
 		)
+		before := current.DeepCopyObject().(client.Object)
 		updateFields(current, deReferencedDesired)
 
-		if updateErr := k8sClient.Update(ctx, current); updateErr != nil {
-			errorReason := fmt.Sprintf("Unable to update %s %s/%s.", kind, current.GetNamespace(), current.GetName())
+		if patchErr := k8sClient.Patch(ctx, current, client.MergeFrom(before)); patchErr != nil {
+			errorReason := fmt.Sprintf("Unable to patch %s %s/%s.", kind, current.GetNamespace(), current.GetName())
 			scope.ReplaceDescendant(current, &errorReason, nil, resourceKind, resourceName)
-			return ctrl.Result{}, updateErr
+			return ctrl.Result{}, patchErr
 		}
 	} else {
 		rLog.Debug(fmt.Sprintf("Current %s %s/%s == desired. No update needed.", kind, deReferencedDesired.GetNamespace(), deReferencedDesired.GetName()))
