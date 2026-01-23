@@ -5,12 +5,11 @@ SKIPERATOR_VERSION=${SKIPERATOR_VERSION:-"v2.8.4"}
 PROMETHEUS_VERSION=${PROMETHEUS_VERSION:-"v0.84.0"}
 
 SKIPERATOR_RESOURCES=(
-  https://raw.githubusercontent.com/kartverket/skiperator/refs/heads/main/config/crd/skiperator.kartverket.no_applications.yaml
-  https://raw.githubusercontent.com/kartverket/skiperator/refs/heads/main/config/crd/skiperator.kartverket.no_routings.yaml
-  https://raw.githubusercontent.com/kartverket/skiperator/refs/heads/main/config/crd/skiperator.kartverket.no_skipjobs.yaml
-  https://raw.githubusercontent.com/kartverket/skiperator/refs/heads/main/config/static/priorities.yaml
-  https://raw.githubusercontent.com/kartverket/skiperator/refs/heads/main/config/rbac/role.yaml
-  https://github.com/cert-manager/cert-manager/releases/download/"${CERT_MANAGER_VERSION}"/cert-manager.yaml
+  https://raw.githubusercontent.com/kartverket/skiperator/${SKIPERATOR_VERSION}/config/crd/skiperator.kartverket.no_applications.yaml
+  https://raw.githubusercontent.com/kartverket/skiperator/${SKIPERATOR_VERSION}/config/crd/skiperator.kartverket.no_routings.yaml
+  https://raw.githubusercontent.com/kartverket/skiperator/${SKIPERATOR_VERSION}/config/crd/skiperator.kartverket.no_skipjobs.yaml
+  https://raw.githubusercontent.com/kartverket/skiperator/${SKIPERATOR_VERSION}/config/static/priorities.yaml
+  https://raw.githubusercontent.com/kartverket/skiperator/${SKIPERATOR_VERSION}/config/rbac/role.yaml
   https://github.com/prometheus-operator/prometheus-operator/releases/download/"${PROMETHEUS_VERSION}"/stripped-down-crds.yaml
   https://raw.githubusercontent.com/nais/liberator/main/config/crd/bases/nais.io_idportenclients.yaml
   https://raw.githubusercontent.com/nais/liberator/main/config/crd/bases/nais.io_maskinportenclients.yaml

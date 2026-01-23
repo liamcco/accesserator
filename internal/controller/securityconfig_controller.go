@@ -19,10 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	accesseratorv1alpha "github.com/kartverket/accesserator/api/v1alpha"
+	"github.com/kartverket/accesserator/internal/eventhandler"
 	"github.com/kartverket/accesserator/internal/resolver"
 	"github.com/kartverket/accesserator/internal/state"
 	"github.com/kartverket/accesserator/pkg/config"
@@ -31,6 +31,7 @@ import (
 	"github.com/kartverket/accesserator/pkg/resourcegenerators/tokenx/egress"
 	"github.com/kartverket/accesserator/pkg/resourcegenerators/tokenx/jwker"
 	"github.com/kartverket/accesserator/pkg/utilities"
+	"github.com/kartverket/skiperator/api/v1alpha1"
 	naisiov1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -57,6 +58,7 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&accesseratorv1alpha.SecurityConfig{}).
 		Owns(&naisiov1.Jwker{}).
+		Watches(&v1alpha1.Application{}, eventhandler.HandleSkiperatorApplicationEvent(r.Client)).
 		Named("securityconfig").
 		Complete(r)
 }
@@ -130,7 +132,7 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					DesiredResource: utilities.Ptr(jwker.GetDesired(jwkerObjectMeta, *scope)),
 					Scope:           scope,
 					ShouldUpdate: func(current, desired *naisiov1.Jwker) bool {
-						return !reflect.DeepEqual(current.Spec, desired.Spec)
+						return !equality.Semantic.DeepEqual(current.Spec, desired.Spec)
 					},
 					UpdateFields: func(current, desired *naisiov1.Jwker) {
 						current.Spec = desired.Spec
@@ -146,7 +148,7 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					DesiredResource: utilities.Ptr(egress.GetDesired(tokenxEgressObjectMeta, *scope)),
 					Scope:           scope,
 					ShouldUpdate: func(current, desired *networkv1.NetworkPolicy) bool {
-						return !reflect.DeepEqual(current.Spec, desired.Spec)
+						return !equality.Semantic.DeepEqual(current.Spec, desired.Spec)
 					},
 					UpdateFields: func(current, desired *networkv1.NetworkPolicy) {
 						current.Spec = desired.Spec

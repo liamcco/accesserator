@@ -1,9 +1,0 @@
-apiVersion: accesserator.kartverket.no/v1alpha
-kind: SecurityConfig
-metadata:
-  labels:
-    app.kubernetes.io/name: accesserator
-    app.kubernetes.io/managed-by: kustomize
-  name: securityconfig-sample
-spec:
-  # TODO(user): Add fields here
