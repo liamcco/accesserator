@@ -1,4 +1,0 @@
-## Append samples of your project ##
-resources:
-- accesserator_v1alpha_securityconfig.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples
