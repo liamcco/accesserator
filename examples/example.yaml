@@ -21,7 +21,6 @@ spec:
     outbound:
       rules:
         - application: another-app
-        - application: yet-another-app
 ---
 apiVersion: skiperator.kartverket.no/v1alpha1
 kind: Application
@@ -59,28 +58,19 @@ spec:
     enabled: true
   applicationRef: another-app
 ---
-apiVersion: skiperator.kartverket.no/v1alpha1
-kind: Application
+apiVersion: ztoperator.kartverket.no/v1alpha1
+kind: AuthPolicy
 metadata:
-  name: yet-another-app
-  namespace: test
-  labels:
-    skiperator/security: "enabled"
-spec:
-  image: nginxinc/nginx-unprivileged:latest
-  port: 8080
-  replicas: 1
-  accessPolicy:
-    inbound:
-      rules:
-        - application: app
----
-apiVersion: accesserator.kartverket.no/v1alpha
-kind: SecurityConfig
-metadata:
-  name: security-config-yet-another-app
+  name: authpolicy
   namespace: test
 spec:
-  tokenx:
-    enabled: true
-  applicationRef: yet-another-app
+  enabled: true
+  selector:
+    matchLabels:
+      app: another-app
+  wellKnownURI: http://tokendings.obo:7456/.well-known/oauth-authorization-server
+  allowedAudiences:
+    - value: "kind-accesserator:test:another-app"
+  ignoreAuthRules:
+    - paths:
+        - /open/path

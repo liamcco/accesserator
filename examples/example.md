@@ -37,7 +37,7 @@ curl -X POST $TEXAS_URL/api/v1/token/exchange \
   -H "Content-Type: application/json" \
   -d '{
     "identity_provider": "tokenx",
-    "target": "kind-accesserator:test:yet-another-app",
-    "user_token": "eyJraWQiOiJhY2Nlc3NlcmF0b3IiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJzb21lLXJhbmRvbS11dWlkIiwiYXVkIjoic29tZS1yYW5kb20tYXVkaWVuY2UiLCJuYmYiOjE3NjkwOTgyMDIsInJvbGUiOiJzb21lLXJhbmRvbS1yb2xlIiwiaXNzIjoiaHR0cDovL21vY2stb2F1dGgyLmF1dGg6ODA4MC9hY2Nlc3NlcmF0b3IiLCJleHAiOjE3NjkxMDE4MDIsImlhdCI6MTc2OTA5ODIwMiwianRpIjoiMjg5Zjc5ODItZWMzNi00MWMzLThlODYtMjdmMjIxMDhkZjQyIn0.h4F81VU0WYATcFo9-ZuAmLJRhzLxb-SxidC36pjh6CU3EwgdmXA5gtrYqNJ0OD2J420S5DP4na0UW-0hdXmJw61mhLvhVweLXW4Fy18Zzny7pPU1kKLiGZipld_BkvHnnG2tMYi0kNAygf36XXgAh4ENMTh-4AtPITYvHHfvpQCyd-KGqi-5uggCu4qjsBj-ynXKduuFECnZ65Ld1WITJb9IPqwskxL0GU4ccWGRX7vVDKuWJoubLfXZcC-4fWorcwi03YJCn-7GJnhu7tewLoqkLVcrjcnn71aAn40v2bDRmhRiaAwSWAWpIdNcI9eiedL7Rq0CJYFRYCihXV_wzA"
+    "target": "kind-accesserator:test:another-app",
+    "user_token": "<USER_TOKEN>"
   }'
 ```

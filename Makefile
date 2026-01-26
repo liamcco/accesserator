@@ -51,7 +51,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: local
-local: ensureflox cluster cert-manager istio skiperator tokendings jwker mock-oauth2 generate install ## Set up entire local development environment with external dependencies
+local: ensureflox cluster cert-manager istio skiperator tokendings jwker ztoperator mock-oauth2 generate install ## Set up entire local development environment with external dependencies
 
 .PHONY: clean
 clean: ensureflox
@@ -204,10 +204,16 @@ jwker: ensureflox install-jwker-crds ## Installing Jwker on k8s cluster
 .PHONY: skiperator
 skiperator: ensureflox ## Install Skiperator on k8s cluster
 	@echo -e "🤞  Installing Skiperator..."
-	@kubectl create namespace skiperator-system || (echo -e "❌  Error creating 'skiperator-system' namespace." && exit 1)
 	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash ./scripts/install-skiperator.sh
 	@kubectl wait pod --for=condition=ready --timeout=30s -n skiperator-system -l app=skiperator --context $(KUBECONTEXT) || (echo -e "❌  Error deploying Skiperator." && exit 1)
 	@echo -e "✅  Skiperator installed in namespace 'skiperator-system'!"
+
+.PHONY: ztoperator
+ztoperator: ensureflox ## Install Ztoperator on k8s cluster
+	@echo -e "🤞  Installing Ztoperator..."
+	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash ./scripts/install-ztoperator.sh
+	@kubectl wait pod --for=condition=ready --timeout=30s -n ztoperator-system -l app=ztoperator --context $(KUBECONTEXT) || (echo -e "❌  Error deploying Ztoperator." && exit 1)
+	@echo -e "✅  Ztoperator installed in namespace 'ztoperator-system'!"
 
 .PHONY: install-istio
 install-istio: ensureflox ## Install istio

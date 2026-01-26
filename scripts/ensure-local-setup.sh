@@ -31,7 +31,7 @@ if [[ "${ctx}" != "${KUBECONTEXT}" ]]; then
   exit 1
 fi
 
-required_namespaces=(obo skiperator-system cert-manager istio-system auth istio-gateways)
+required_namespaces=(obo skiperator-system ztoperator-system cert-manager istio-system auth istio-gateways)
 
 for ns in "${required_namespaces[@]}"; do
   if ! "${KUBECTL_BIN}" get namespace "${ns}" --context "${KUBECONTEXT}" >/dev/null 2>&1; then
