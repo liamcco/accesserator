@@ -25,7 +25,7 @@ distinguished_name = dn
 req_extensions     = req_ext
 
 [ dn ]
-CN = ztoperator-webhook
+CN = accesserator-webhook
 
 [ req_ext ]
 subjectAltName = @alt_names
