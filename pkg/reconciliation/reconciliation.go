@@ -159,7 +159,11 @@ func ReconcileControllerResource[T client.Object](
 				deReferencedDesired.GetName(),
 			),
 		)
-		if controllerRefErr := ctrl.SetControllerReference(&scope.SecurityConfig, deReferencedDesired, scheme); controllerRefErr != nil {
+		if controllerRefErr := ctrl.SetControllerReference(
+			&scope.SecurityConfig,
+			deReferencedDesired,
+			scheme,
+		); controllerRefErr != nil {
 			errorReason := fmt.Sprintf(
 				"Unable to set AuthPolicy ownerReference on %s %s/%s.",
 				kind,
@@ -208,7 +212,7 @@ func ReconcileControllerResource[T client.Object](
 	rLog.Debug(fmt.Sprintf("%s %s/%s exists", kind, deReferencedDesired.GetNamespace(), deReferencedDesired.GetName()))
 	rLog.Debug(
 		fmt.Sprintf(
-			"Determing if %s %s/%s should be updated",
+			"Determine if %s %s/%s should be updated",
 			kind,
 			deReferencedDesired.GetNamespace(),
 			deReferencedDesired.GetName(),
@@ -235,15 +239,32 @@ func ReconcileControllerResource[T client.Object](
 		updateFields(current, deReferencedDesired)
 
 		if patchErr := k8sClient.Patch(ctx, current, client.MergeFrom(before)); patchErr != nil {
-			errorReason := fmt.Sprintf("Unable to patch %s %s/%s.", kind, current.GetNamespace(), current.GetName())
+			errorReason := fmt.Sprintf(
+				"Unable to patch %s %s/%s.",
+				kind,
+				current.GetNamespace(),
+				current.GetName(),
+			)
 			scope.ReplaceDescendant(current, &errorReason, nil, resourceKind, resourceName)
 			return ctrl.Result{}, patchErr
 		}
 	} else {
-		rLog.Debug(fmt.Sprintf("Current %s %s/%s == desired. No update needed.", kind, deReferencedDesired.GetNamespace(), deReferencedDesired.GetName()))
+		rLog.Debug(
+			fmt.Sprintf(
+				"Current %s %s/%s == desired. No update needed.",
+				kind,
+				deReferencedDesired.GetNamespace(),
+				deReferencedDesired.GetName(),
+			),
+		)
 	}
 
-	successMessage := fmt.Sprintf("Successfully generated %s %s/%s", kind, current.GetNamespace(), current.GetName())
+	successMessage := fmt.Sprintf(
+		"Successfully generated %s %s/%s",
+		kind,
+		current.GetNamespace(),
+		current.GetName(),
+	)
 	rLog.Info(successMessage)
 	scope.ReplaceDescendant(current, nil, &successMessage, resourceKind, resourceName)
 

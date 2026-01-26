@@ -22,7 +22,10 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *naisiov1.Jwker {
 	}
 }
 
-func getNaisIoV1AccessPolicy(skiperatorAccessPolicy *podtypes.AccessPolicy, securityConfigNamespace string) *naisiov1.AccessPolicy {
+func getNaisIoV1AccessPolicy(
+	skiperatorAccessPolicy *podtypes.AccessPolicy,
+	securityConfigNamespace string,
+) *naisiov1.AccessPolicy {
 	if skiperatorAccessPolicy == nil {
 		return nil
 	}
@@ -56,7 +59,10 @@ func getNaisIoV1AccessPolicy(skiperatorAccessPolicy *podtypes.AccessPolicy, secu
 	}
 }
 
-func getNaisIoV1AccessPolicyRule(skiperatorAccessPolicyRule podtypes.InternalRule, securityConfigNamespace string) naisiov1.AccessPolicyRule {
+func getNaisIoV1AccessPolicyRule(
+	skiperatorAccessPolicyRule podtypes.InternalRule,
+	securityConfigNamespace string,
+) naisiov1.AccessPolicyRule {
 	var accessPolicyNamespace string
 	if skiperatorAccessPolicyRule.Namespace != "" {
 		accessPolicyNamespace = skiperatorAccessPolicyRule.Namespace

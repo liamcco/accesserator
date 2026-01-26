@@ -13,10 +13,7 @@ import (
 )
 
 func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securityConfig v1alpha.SecurityConfig) (*state.Scope, error) {
-	tokenXEnabled := false
-	if securityConfig.Spec.Tokenx != nil && securityConfig.Spec.Tokenx.Enabled {
-		tokenXEnabled = true
-	}
+	tokenXEnabled := securityConfig.Spec.Tokenx != nil && securityConfig.Spec.Tokenx.Enabled
 	if !tokenXEnabled {
 		return &state.Scope{
 			SecurityConfig: securityConfig,

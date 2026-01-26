@@ -76,7 +76,7 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	securityConfig := new(accesseratorv1alpha.SecurityConfig)
 	rlog.Info("Reconciling SecurityConfig", "name", req.NamespacedName)
 
-	if err := r.Client.Get(ctx, req.NamespacedName, securityConfig); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, securityConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			rlog.Debug("SecurityConig with not found. Probably a delete.", "name", req.NamespacedName)
 			return reconcile.Result{}, nil
@@ -89,14 +89,14 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		securityConfig,
 		"Normal",
 		"ReconcileStarted",
-		fmt.Sprintf("SecurityConfig with name %s started.", req.NamespacedName.String()),
+		fmt.Sprintf("SecurityConfig with name %s started.", req.String()),
 	)
 	rlog.Debug("SecurityConfig found", "name", req.NamespacedName)
 
 	securityConfig.InitializeStatus()
 	deepCopiedSecurityConfig := securityConfig.DeepCopy()
 
-	if !securityConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !securityConfig.DeletionTimestamp.IsZero() {
 		rlog.Info("SecurityConfig is marked for deletion.", "name", req.NamespacedName)
 		return reconcile.Result{}, nil
 	}
@@ -210,7 +210,7 @@ func (r *SecurityConfigReconciler) updateStatusWithRetriesOnConflict(
 ) error {
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		latest := &accesseratorv1alpha.SecurityConfig{}
-		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(&securityConfig), latest); err != nil {
+		if err := r.Get(ctx, client.ObjectKeyFromObject(&securityConfig), latest); err != nil {
 			return err
 		}
 		latest.Status = securityConfig.Status
@@ -273,7 +273,7 @@ func (r *SecurityConfigReconciler) updateStatus(
 		accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
 	}
 
-	var conditions []metav1.Condition
+	conditions := make([]metav1.Condition, 0, len(scope.Descendants)+len(controllerResources))
 	descendantIDs := map[string]bool{}
 
 	for _, d := range scope.Descendants {

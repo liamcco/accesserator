@@ -246,7 +246,7 @@ func getTexasContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 				Protocol:      corev1.ProtocolTCP,
 			},
 		},
-		// NOTE: RestartPolicy Always is only avaiable for init containers in Kubernetes v1.33+
+		// NOTE: RestartPolicy Always is only available for init containers in Kubernetes v1.33+
 		// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#detailed-behavior
 		RestartPolicy: utilities.Ptr(corev1.ContainerRestartPolicyAlways),
 		SecurityContext: &corev1.SecurityContext{
@@ -307,17 +307,17 @@ func validatePod(ctx context.Context, crudClient client.Client, obj runtime.Obje
 	}
 
 	if securityConfigForPod.SecurityConfig.Spec.Tokenx != nil && securityConfigForPod.SecurityConfig.Spec.Tokenx.Enabled {
-		warnings, validateTokenXConfErr := validateTokenxCorrectlyConfigured(pod, securityConfigForPod)
+		validateTokenXConfErr := validateTokenxCorrectlyConfigured(pod, securityConfigForPod)
 		if validateTokenXConfErr != nil {
 			podlog.Error(validateTokenXConfErr, "Failed to validate for Pod")
-			return warnings, validateTokenXConfErr
+			return nil, validateTokenXConfErr
 		}
 	}
 
 	return nil, nil
 }
 
-func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSecurityConfiguration) (admission.Warnings, error) {
+func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSecurityConfiguration) error {
 	// Validate that the Texas init container exists
 	hasTexasInitContainer := false
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -327,14 +327,14 @@ func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *Po
 				securityConfigForPod.TexasContainer,
 				initContainer,
 			) {
-				return nil, fmt.Errorf("texas init container is not as expected given the SecurityConfig")
+				return fmt.Errorf("texas init container is not as expected given the SecurityConfig")
 			}
 			break
 		}
 	}
 	if !hasTexasInitContainer {
 		podlog.Info("TokenX is enabled but texas init container is missing")
-		return nil, fmt.Errorf("TokenX is enabled but init container '%s' is missing", TexasInitContainerName)
+		return fmt.Errorf("TokenX is enabled but init container '%s' is missing", TexasInitContainerName)
 	}
 
 	// Validate that the application container has the TEXAS_URL env variable
@@ -352,25 +352,21 @@ func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *Po
 	}
 	if !hasTexasUrlEnvVar {
 		podlog.Info("TokenX is enabled but TEXAS_URL env var is missing", "container", securityConfigForPod.AppName)
-		return nil, fmt.Errorf("TokenX is enabled but container '%s' is missing environment variable '%s'", securityConfigForPod.AppName, config.Get().TexasUrlEnvVarName)
+		return fmt.Errorf("TokenX is enabled but container '%s' is missing environment variable '%s'", securityConfigForPod.AppName, config.Get().TexasUrlEnvVarName)
 	}
-	return nil, nil
+	return nil
 }
 
 func isTexasContainerEqual(expected, actual corev1.Container) bool {
-	isEqual := true
-	if expected.Name != actual.Name ||
-		expected.Image != actual.Image ||
-		!reflect.DeepEqual(expected.RestartPolicy, actual.RestartPolicy) ||
-		!reflect.DeepEqual(expected.Env, actual.Env) ||
-		!reflect.DeepEqual(expected.EnvFrom, actual.EnvFrom) ||
-		!reflect.DeepEqual(expected.Ports, actual.Ports) ||
-		!reflect.DeepEqual(expected.SecurityContext, actual.SecurityContext) ||
-		!reflect.DeepEqual(expected.TerminationMessagePath, actual.TerminationMessagePath) ||
-		!reflect.DeepEqual(expected.TerminationMessagePolicy, actual.TerminationMessagePolicy) {
-		isEqual = false
-	}
-	return isEqual
+	return expected.Name == actual.Name &&
+		expected.Image == actual.Image &&
+		reflect.DeepEqual(expected.RestartPolicy, actual.RestartPolicy) &&
+		reflect.DeepEqual(expected.Env, actual.Env) &&
+		reflect.DeepEqual(expected.EnvFrom, actual.EnvFrom) &&
+		reflect.DeepEqual(expected.Ports, actual.Ports) &&
+		reflect.DeepEqual(expected.SecurityContext, actual.SecurityContext) &&
+		reflect.DeepEqual(expected.TerminationMessagePath, actual.TerminationMessagePath) &&
+		reflect.DeepEqual(expected.TerminationMessagePolicy, actual.TerminationMessagePolicy)
 }
 
 func getTexasUrlEnvVarValue() string {

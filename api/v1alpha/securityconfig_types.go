@@ -103,7 +103,7 @@ func (s *SecurityConfig) InitializeStatus() {
 	if s.Status.Conditions == nil {
 		s.Status.Conditions = []metav1.Condition{}
 	}
-	s.Status.ObservedGeneration = s.ObjectMeta.GetGeneration()
+	s.Status.ObservedGeneration = s.GetGeneration()
 	s.Status.Ready = false
 	s.Status.Phase = PhasePending
 }
