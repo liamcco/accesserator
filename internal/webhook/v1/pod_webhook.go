@@ -238,12 +238,14 @@ func GetSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 }
 
 func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
+	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
+
 	return corev1.Volume{
-		Name: "opa-istio-config",
+		Name: expectedOpaConfigName,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "opa-istio-config",
+					Name: expectedOpaConfigName,
 				},
 				Items: []corev1.KeyToPath{
 					{Key: "config.yaml", Path: "config.yaml"},
@@ -259,6 +261,8 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 		config.Get().OpaImageName,
 		config.Get().OpaImageTag,
 	)
+
+	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
 
 	return corev1.Container{
 		Name:  OpaInitContainerName,
@@ -296,7 +300,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 		TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		VolumeMounts: []corev1.VolumeMount{
 			{
-				Name:      "opa-istio-config",
+				Name:      expectedOpaConfigName,
 				MountPath: "/config",
 				ReadOnly:  true,
 			},
