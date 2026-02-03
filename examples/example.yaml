@@ -46,6 +46,8 @@ metadata:
 spec:
   tokenx:
     enabled: true
+  opa:
+    enabled: true
   applicationRef: app
 ---
 apiVersion: accesserator.kartverket.no/v1alpha
@@ -55,6 +57,8 @@ metadata:
   namespace: test
 spec:
   tokenx:
+    enabled: true
+  opa:
     enabled: true
   applicationRef: another-app
 ---
