@@ -47,6 +47,16 @@ spec:
                 description: ApplicationRef is a reference to the name of the SKIP
                   application for which this SecurityConfig applies.
                 type: string
+              opa:
+                description: OpaSpec defines the configuration for OPA sidecar.
+                properties:
+                  enabled:
+                    description: Enabled indicates whether the OPA sidecar should
+                      be included for the application.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               tokenx:
                 description: |-
                   Tokenx indicates whether a sidecar (called Texas) is started with the application referred to by `applicationRef`
