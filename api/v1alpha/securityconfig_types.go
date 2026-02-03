@@ -31,6 +31,9 @@ type SecurityConfigSpec struct {
 	// +kubebuilder:validation:Optional
 	Tokenx *TokenXSpec `json:"tokenx,omitempty"`
 
+	// +kubebuilder:validation:Optional
+	Opa *OpaSpec `json:"opa,omitempty"`
+
 	// ApplicationRef is a reference to the name of the SKIP application for which this SecurityConfig applies.
 	//
 	// +kubebuilder:validation:Required
@@ -42,6 +45,16 @@ type SecurityConfigSpec struct {
 // +kubebuilder:object:generate=true
 type TokenXSpec struct {
 	// Enabled indicates whether the TokenX sidecar should be included for the application.
+	//
+	// +kubebuilder:validation:Required
+	Enabled bool `json:"enabled"`
+}
+
+// OpaSpec defines the configuration for OPA sidecar.
+//
+// +kubebuilder:object:generate=true
+type OpaSpec struct {
+	// Enabled indicates whether the OPA sidecar should be included for the application.
 	//
 	// +kubebuilder:validation:Required
 	Enabled bool `json:"enabled"`
