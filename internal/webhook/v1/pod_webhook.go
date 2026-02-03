@@ -30,6 +30,7 @@ const (
 
 	OpaInitContainerName = "opa"
 	OpaPortName          = "http"
+	OpaTmpVolumeName     = "opa-tmp"
 
 	MaskinportenEnabledEnvVarName = "MASKINPORTEN_ENABLED"
 	AzureEnabledEnvVarName        = "AZURE_ENABLED"
@@ -102,6 +103,7 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 		podlog.Info("Opa is enabled, injecting Opa init container and config volume")
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, securityConfigForPod.OpaContainer)
 		pod.Spec.Volumes = append(pod.Spec.Volumes, securityConfigForPod.OpaConfigVolume)
+		ensureEmptyDirVolume(&pod.Spec, OpaTmpVolumeName)
 
 		podlog.Info("Injecting opa url")
 		for i := range pod.Spec.Containers {
@@ -303,7 +305,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 				},
 			},
 			Privileged:             utilities.Ptr(false),
-			ReadOnlyRootFilesystem: utilities.Ptr(true),
+			ReadOnlyRootFilesystem: utilities.Ptr(true), // will make tmp/opa writes difficult...
 			RunAsGroup:             utilities.Ptr(int64(150)),
 			RunAsNonRoot:           utilities.Ptr(true),
 			RunAsUser:              utilities.Ptr(int64(150)),
@@ -315,6 +317,10 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 				Name:      expectedOpaConfigName,
 				MountPath: "/config",
 				ReadOnly:  true,
+			},
+			{
+				Name:      OpaTmpVolumeName,
+				MountPath: "/tmp",
 			},
 		},
 		Env: []corev1.EnvVar{
@@ -405,6 +411,20 @@ func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container
 		},
 		EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: expectedJwkerSecretName}}}},
 	}, nil
+}
+
+func ensureEmptyDirVolume(podSpec *corev1.PodSpec, name string) {
+	for _, volume := range podSpec.Volumes {
+		if volume.Name == name {
+			return
+		}
+	}
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
 }
 
 func validatePod(ctx context.Context, crudClient client.Client, obj runtime.Object) (admission.Warnings, error) {
