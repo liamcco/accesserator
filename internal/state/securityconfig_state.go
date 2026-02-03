@@ -16,6 +16,7 @@ import (
 type Scope struct {
 	SecurityConfig         v1alpha.SecurityConfig
 	TokenXConfig           TokenXConfig
+	OpaConfig              OpaConfig
 	Descendants            []Descendant[client.Object]
 	InvalidConfig          bool
 	ValidationErrorMessage *string
@@ -24,6 +25,10 @@ type Scope struct {
 type TokenXConfig struct {
 	Enabled      bool
 	AccessPolicy *podtypes.AccessPolicy
+}
+
+type OpaConfig struct {
+	Enabled bool
 }
 
 type Descendant[T client.Object] struct {
