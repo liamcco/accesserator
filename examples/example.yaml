@@ -19,6 +19,22 @@ spec:
   replicas: 1
   accessPolicy:
     outbound:
+      external:
+        - host: ghcr.io
+          ports:
+            - name: https
+              protocol: HTTPS
+              port: 443
+        - host: pkg-containers.githubusercontent.com
+          ports:
+            - name: https
+              protocol: HTTPS
+              port: 443
+        - host: objects.githubusercontent.com
+          ports:
+            - name: https
+              protocol: HTTPS
+              port: 443
       rules:
         - application: another-app
 ---
@@ -37,6 +53,23 @@ spec:
     inbound:
       rules:
         - application: app
+    outbound:
+      external:
+        - host: ghcr.io
+          ports:
+            - name: https
+              protocol: HTTPS
+              port: 443
+        - host: pkg-containers.githubusercontent.com
+          ports:
+            - name: https
+              protocol: HTTPS
+              port: 443
+        - host: objects.githubusercontent.com
+          ports:
+            - name: https
+              protocol: HTTPS
+              port: 443
 ---
 apiVersion: accesserator.kartverket.no/v1alpha
 kind: SecurityConfig
