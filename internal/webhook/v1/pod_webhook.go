@@ -28,6 +28,9 @@ const (
 	TexasInitContainerName = "texas"
 	TexasPortName          = "http"
 
+	OpaInitContainerName = "opa"
+	OpaPortName          = "http"
+
 	MaskinportenEnabledEnvVarName = "MASKINPORTEN_ENABLED"
 	AzureEnabledEnvVarName        = "AZURE_ENABLED"
 	IdportenEnabledEnvVarName     = "IDPORTEN_ENABLED"
@@ -93,6 +96,23 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 		}
 	}
 
+	if securityConfigForPod.SecurityConfig.Spec.Opa != nil && securityConfigForPod.SecurityConfig.Spec.Opa.Enabled {
+		// Opa is enabled for this Application
+		// We inject an init container with Opa in the pod
+		podlog.Info("Opa is enabled, injecting Opa init container")
+		pod.Spec.InitContainers = append(pod.Spec.InitContainers, securityConfigForPod.OpaContainer)
+
+		podlog.Info("Injecting opa url")
+		for i := range pod.Spec.Containers {
+			if pod.Spec.Containers[i].Name == securityConfigForPod.AppName {
+				pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{
+					Name:  config.Get().OpaUrlEnvVarName,
+					Value: getOpaUrlEnvVarValue(),
+				})
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -134,6 +154,7 @@ type PodSecurityConfiguration struct {
 	AppName         string
 	SecurityEnabled bool
 	TexasContainer  corev1.Container
+	OpaContainer    corev1.Container
 }
 
 // getSecurityConfigForPod extracts the SecurityConfig for a given pod and determines if security is enabled.
@@ -212,20 +233,92 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct Texas container: %w", err)
 	}
+	opaContainer := getOpaContainer(*securityConfig)
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
 		AppName:         appName,
 		SecurityEnabled: true,
 		TexasContainer:  *texasContainer,
+		OpaContainer:    opaContainer,
 	}, nil
+}
+
+func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
+	opaImageUrl := fmt.Sprintf(
+		"%s:%s",
+		config.Get().OpaImageName,
+		config.Get().OpaImageTag,
+	)
+
+	return corev1.Container{
+		Name:  OpaInitContainerName,
+		Image: opaImageUrl,
+		Args: []string{
+			"run",
+			"--server",
+			"--config-file=/config/config.yaml",
+			"--addr=0.0.0.0:8181", // TODO: Use OpaPort parameter
+		},
+		Ports: []corev1.ContainerPort{
+			{Name: OpaPortName, ContainerPort: config.Get().OpaPort, Protocol: corev1.ProtocolTCP},
+			{Name: "grpc", ContainerPort: 9191, Protocol: corev1.ProtocolTCP},
+		},
+		// NOTE: RestartPolicy Always is only available for init containers in Kubernetes v1.33+
+		// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#detailed-behavior
+		RestartPolicy: utilities.Ptr(corev1.ContainerRestartPolicyAlways),
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: utilities.Ptr(false),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{
+					"ALL",
+				},
+				Add: []corev1.Capability{
+					"NET_BIND_SERVICE",
+				},
+			},
+			Privileged:             utilities.Ptr(false),
+			ReadOnlyRootFilesystem: utilities.Ptr(true),
+			RunAsGroup:             utilities.Ptr(int64(150)),
+			RunAsNonRoot:           utilities.Ptr(true),
+			RunAsUser:              utilities.Ptr(int64(150)),
+		},
+		TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+		TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "opa-istio-config",
+				MountPath: "/config",
+				ReadOnly:  true,
+			},
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name: "GITHUB_TOKEN",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "opa-github-secret"},
+						Key:                  "github_token",
+					},
+				},
+			},
+			{
+				Name: "OPA_PUBLIC_KEY",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "opa-sign-secret"},
+						Key:                  "public_sign_key",
+					},
+				},
+			},
+		},
+	}
 }
 
 func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
 	if securityConfig.Spec.Tokenx == nil || !securityConfig.Spec.Tokenx.Enabled {
 		return nil, fmt.Errorf("a texas container should not be created if tokenx is not enabled")
 	}
-
 	texasImageUrl := fmt.Sprintf(
 		"%s:%s",
 		config.Get().TexasImageName,
@@ -313,6 +406,14 @@ func validatePod(ctx context.Context, crudClient client.Client, obj runtime.Obje
 		}
 	}
 
+	if securityConfigForPod.SecurityConfig.Spec.Opa != nil && securityConfigForPod.SecurityConfig.Spec.Opa.Enabled {
+		validateOpaConfErr := validateOpaCorrectlyConfigured(pod, securityConfigForPod)
+		if validateOpaConfErr != nil {
+			podlog.Error(validateOpaConfErr, "Failed to validate for Pod")
+			return nil, validateOpaConfErr
+		}
+	}
+
 	return nil, nil
 }
 
@@ -362,6 +463,46 @@ func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *Po
 	return nil
 }
 
+func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSecurityConfiguration) error {
+	// Validate that the Texas init container exists
+	hasOpaInitContainer := false
+	for _, initContainer := range pod.Spec.InitContainers {
+		if initContainer.Name == OpaInitContainerName {
+			hasOpaInitContainer = true
+			if !isOpaContainerEqual(
+				securityConfigForPod.OpaContainer,
+				initContainer,
+			) {
+				return fmt.Errorf("Opa init container is not as expected given the SecurityConfig")
+			}
+			break
+		}
+	}
+	if !hasOpaInitContainer {
+		podlog.Info("Opa is enabled but texas init container is missing")
+		return fmt.Errorf("Opa is enabled but init container '%s' is missing", OpaInitContainerName)
+	}
+
+	// Validate that the application container has the TEXAS_URL env variable
+	hasOpaUrlEnvVar := false
+	for _, container := range pod.Spec.Containers {
+		if container.Name == securityConfigForPod.AppName {
+			for _, envVar := range container.Env {
+				if envVar.Name == config.Get().OpaUrlEnvVarName && envVar.Value == getOpaUrlEnvVarValue() {
+					hasOpaUrlEnvVar = true
+					break
+				}
+			}
+			break
+		}
+	}
+	if !hasOpaUrlEnvVar {
+		podlog.Info("Opa is enabled but OPA_URL env var is missing", "container", securityConfigForPod.AppName)
+		return fmt.Errorf("Opa is enabled but container '%s' is missing environment variable '%s'", securityConfigForPod.AppName, config.Get().OpaUrlEnvVarName)
+	}
+	return nil
+}
+
 func isTexasContainerEqual(expected, actual corev1.Container) bool {
 	return expected.Name == actual.Name &&
 		expected.Image == actual.Image &&
@@ -374,6 +515,23 @@ func isTexasContainerEqual(expected, actual corev1.Container) bool {
 		reflect.DeepEqual(expected.TerminationMessagePolicy, actual.TerminationMessagePolicy)
 }
 
+func isOpaContainerEqual(expected, actual corev1.Container) bool {
+	return expected.Name == actual.Name &&
+		expected.Image == actual.Image &&
+		reflect.DeepEqual(expected.Args, actual.Args) &&
+		reflect.DeepEqual(expected.VolumeMounts, actual.VolumeMounts) &&
+		reflect.DeepEqual(expected.RestartPolicy, actual.RestartPolicy) &&
+		reflect.DeepEqual(expected.Env, actual.Env) &&
+		reflect.DeepEqual(expected.Ports, actual.Ports) &&
+		reflect.DeepEqual(expected.SecurityContext, actual.SecurityContext) &&
+		reflect.DeepEqual(expected.TerminationMessagePath, actual.TerminationMessagePath) &&
+		reflect.DeepEqual(expected.TerminationMessagePolicy, actual.TerminationMessagePolicy)
+}
+
 func getTexasUrlEnvVarValue() string {
 	return fmt.Sprintf("http://localhost:%d", config.Get().TexasPort)
+}
+
+func getOpaUrlEnvVarValue() string {
+	return fmt.Sprintf("http://localhost:%d", config.Get().OpaPort)
 }
