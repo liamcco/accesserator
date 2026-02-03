@@ -110,8 +110,9 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 	if securityConfigForPod.SecurityConfig.Spec.Opa != nil && securityConfigForPod.SecurityConfig.Spec.Opa.Enabled {
 		// Opa is enabled for this Application
 		// We inject an init container with Opa in the pod
-		podlog.Info("Opa is enabled, injecting Opa init container")
+		podlog.Info("Opa is enabled, injecting Opa init container and config volume")
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, securityConfigForPod.OpaContainer)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, securityConfigForPod.OpaConfigVolume)
 
 		podlog.Info("Injecting opa url")
 		for i := range pod.Spec.Containers {
@@ -170,6 +171,7 @@ type PodSecurityConfiguration struct {
 	SecurityEnabled bool
 	TexasContainer  corev1.Container
 	OpaContainer    corev1.Container
+	OpaConfigVolume corev1.Volume
 }
 
 // getSecurityConfigForPod extracts the SecurityConfig for a given pod and determines if security is enabled.
@@ -239,6 +241,7 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 
 	texasContainer := getTexasContainer(*securityConfig)
 	opaContainer := getOpaContainer(*securityConfig)
+	opaConfigVolume := getOpaConfigVolume(*securityConfig)
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
@@ -246,7 +249,24 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 		SecurityEnabled: true,
 		TexasContainer:  texasContainer,
 		OpaContainer:    opaContainer,
+		OpaConfigVolume: opaConfigVolume,
 	}, nil
+}
+
+func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
+	return corev1.Volume{
+		Name: "opa-istio-config",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: "opa-istio-config",
+				},
+				Items: []corev1.KeyToPath{
+					{Key: "config.yaml", Path: "config.yaml"},
+				},
+			},
+		},
+	}
 }
 
 func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
@@ -515,7 +535,8 @@ func isOpaContainerEqual(expected, actual corev1.Container) bool {
 	return expected.Name == actual.Name &&
 		expected.Image == actual.Image &&
 		reflect.DeepEqual(expected.Args, actual.Args) &&
-		reflect.DeepEqual(expected.VolumeMounts, actual.VolumeMounts) &&
+		// Other mutating webhooks inject VolumeMounts into PodSpec
+		// reflect.DeepEqual(expected.VolumeMounts, actual.VolumeMounts) &&
 		reflect.DeepEqual(expected.RestartPolicy, actual.RestartPolicy) &&
 		reflect.DeepEqual(expected.Env, actual.Env) &&
 		reflect.DeepEqual(expected.Ports, actual.Ports) &&
