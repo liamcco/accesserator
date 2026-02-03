@@ -9,6 +9,7 @@ import (
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1/podtypes"
 	nais_io_v1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -97,4 +98,19 @@ func (s *Scope) GetJwker(ctx context.Context, k8sClient client.Client) (*nais_io
 		return nil, fmt.Errorf("failed to fetch Jwker resource named %s: %w", jwkerName, err)
 	}
 	return &jwker, nil
+}
+
+func (s *Scope) GetOpaConfig(ctx context.Context, k8sClient client.Client) (*corev1.ConfigMap, error) {
+	var configMap corev1.ConfigMap
+	if k8sClient == nil {
+		return nil, fmt.Errorf("k8sClient not configured")
+	}
+	opaConfigName := utilities.GetOpaConfigName(s.SecurityConfig.Spec.ApplicationRef)
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      opaConfigName,
+		Namespace: s.SecurityConfig.Namespace,
+	}, &configMap); err != nil {
+		return nil, fmt.Errorf("failed to fetch Opa config resource named %s: %w", opaConfigName, err)
+	}
+	return &configMap, nil
 }
