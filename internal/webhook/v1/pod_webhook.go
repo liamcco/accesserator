@@ -481,11 +481,11 @@ func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSe
 		}
 	}
 	if !hasOpaInitContainer {
-		podlog.Info("Opa is enabled but texas init container is missing")
+		podlog.Info("Opa is enabled but Opa init container is missing")
 		return fmt.Errorf("Opa is enabled but init container '%s' is missing", OpaInitContainerName)
 	}
 
-	// Validate that the application container has the TEXAS_URL env variable
+	// Validate that the application container has the OPA_URL env variable
 	hasOpaUrlEnvVar := false
 	for _, container := range pod.Spec.Containers {
 		if container.Name == securityConfigForPod.AppName {
