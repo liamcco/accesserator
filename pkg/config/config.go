@@ -15,6 +15,10 @@ type Config struct {
 	TexasImageTag      string `split_words:"true"`
 	TexasPort          int32  `split_words:"true" default:"3000"`
 	TexasUrlEnvVarName string `split_words:"true" default:"TEXAS_URL"`
+	OpaImageName       string `split_words:"true" default:"openpolicyagent/opa"`
+	OpaImageTag        string `split_words:"true" default:"1.9.0-istio-5-static"`
+	OpaPort            int32  `split_words:"true" default:"8181"`
+	OpaUrlEnvVarName   string `split_words:"true" default:"OPA_URL"`
 }
 
 var cfg Config
