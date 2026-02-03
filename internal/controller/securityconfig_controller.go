@@ -12,11 +12,13 @@ import (
 	"github.com/kartverket/accesserator/pkg/config"
 	"github.com/kartverket/accesserator/pkg/log"
 	"github.com/kartverket/accesserator/pkg/reconciliation"
+	"github.com/kartverket/accesserator/pkg/resourcegenerators/opa"
 	"github.com/kartverket/accesserator/pkg/resourcegenerators/tokenx/egress"
 	"github.com/kartverket/accesserator/pkg/resourcegenerators/tokenx/jwker"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1"
 	naisiov1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -50,6 +52,7 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Owns(&naisiov1.Jwker{}).
 		Owns(&networkv1.NetworkPolicy{}).
+		Owns(&corev1.ConfigMap{}).
 		Watches(&v1alpha1.Application{}, eventhandler.HandleSkiperatorApplicationEvent(r.Client)).
 		Named("securityconfig").
 		Complete(r)
@@ -61,6 +64,7 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=skiperator.kartverket.no,resources=applications,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nais.io,resources=jwkers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -116,6 +120,11 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Namespace: securityConfig.Namespace,
 	}
 
+	OpaConfigObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
+
 	controllerResources := []reconciliation.ControllerResource{
 		ControllerResourceAdapter[*naisiov1.Jwker]{
 			reconciliation.ReconcilerAdapter[*naisiov1.Jwker]{
@@ -145,6 +154,22 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 					UpdateFields: func(current, desired *networkv1.NetworkPolicy) {
 						current.Spec = desired.Spec
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*corev1.ConfigMap]{
+			reconciliation.ReconcilerAdapter[*corev1.ConfigMap]{
+				Func: reconciliation.ResourceReconciler[*corev1.ConfigMap]{
+					ResourceKind:    "ConfigMap",
+					ResourceName:    OpaConfigObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetDesired(OpaConfigObjectMeta, *scope)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *corev1.ConfigMap) bool {
+						return !equality.Semantic.DeepEqual(current.Data, desired.Data)
+					},
+					UpdateFields: func(current, desired *corev1.ConfigMap) {
+						current.Data = desired.Data
 					},
 				},
 			},
@@ -265,6 +290,28 @@ func (r *SecurityConfigReconciler) updateStatus(
 			securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
 			accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
 		}
+
+	case scope.OpaConfig.Enabled:
+		_, getOpaConfigErr := scope.GetOpaConfig(ctx, r.Client) // opaConfigResource
+		if getOpaConfigErr != nil {
+			rLog.Error(
+				getOpaConfigErr,
+				fmt.Sprintf(
+					"Failed to get Opa config resource with name %s when updating SecurityConfig status",
+					utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef),
+				),
+			)
+			r.Recorder.Eventf(&securityConfig, "Error", "StatusUpdateFailed", "Failed to get Opa config resource with name %s.", utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef))
+		}
+		// Here is where you'd update Status
+		// if opaConfigResource.Status.SynchronizationState != "RolloutComplete" {
+		//	securityConfig.Status.SetPhasePending("SecurityConfig pending due to missing secrets (github_token or opa_public_sign_key).")
+		//  statusMsg:= fmt.Sprintf("Opa config resource with name %s has not finished registering an OAuth client", opaConfigResource.Name)
+		//	accesseratorv1alpha.SetConditionPending(&statusCondition, statusMsg)
+		// } else {
+		securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
+		accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
+		// }
 
 	default:
 		securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
