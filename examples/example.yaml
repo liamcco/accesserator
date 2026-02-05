@@ -81,6 +81,12 @@ spec:
     enabled: true
   opa:
     enabled: true
+    githubCredentials:
+      clientTokenKey: "github_token"
+      clientTokenRef: "opa-github-secret"
+    bundlePublicKey: "sfjnskfjsnkfjsnkjsbg"
+    bundleRepo: "ldjfhsdjlf"
+    bundleResource: "ghcr.io/kartverket/opa-bundle:latest"
   applicationRef: app
 ---
 apiVersion: accesserator.kartverket.no/v1alpha
@@ -93,6 +99,12 @@ spec:
     enabled: true
   opa:
     enabled: true
+    githubCredentials:
+      clientTokenKey: "github_token"
+      clientTokenRef: "opa-github-secret"
+    bundlePublicKey: "sfjnskfjsnkfjsnkjsbg"
+    bundleRepo: "ldjfhsdjlf"
+    bundleResource: "ghcr.io/kartverket/opa-bundle:latest"
   applicationRef: another-app
 ---
 apiVersion: ztoperator.kartverket.no/v1alpha1
