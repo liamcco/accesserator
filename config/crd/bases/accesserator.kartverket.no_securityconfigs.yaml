@@ -50,28 +50,71 @@ spec:
               opa:
                 description: OpaSpec defines the configuration for OPA sidecar.
                 properties:
-                  bundlePublicKey:
+                  bundlePath:
+                    description: BundlePath is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle.
                     type: string
-                  bundleResource:
-                    description: BundleResource is the OCI bundle reference, e.g.
-                      ghcr.io/org/opa-bundle:latest.
+                  bundlePublicKey:
+                    description: |-
+                      BundlePublicKey is a reference to the ConfigMap and key containing the public key
+                      used to verify bundle signatures.
+                    properties:
+                      key:
+                        description: The key to select.
+                        type: string
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                      optional:
+                        description: Specify whether the ConfigMap or its key must
+                          be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  bundleVersion:
+                    description: BundleVersion is the tag or digest for the bundle
+                      reference, e.g. v3.0.1.
                     type: string
                   enabled:
                     description: Enabled indicates whether the OPA sidecar should
                       be included for the application.
                     type: boolean
-                  githubCredentials:
+                  githubToken:
+                    description: GithubToken is a reference to the Secret and key
+                      containing the GitHub token.
                     properties:
-                      clientTokenKey:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
                         type: string
-                      clientTokenRef:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                         type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
                     required:
-                    - clientTokenKey
-                    - clientTokenRef
+                    - key
                     type: object
+                    x-kubernetes-map-type: atomic
                 required:
+                - bundlePublicKey
                 - enabled
+                - githubToken
                 type: object
               tokenx:
                 description: |-

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -57,17 +58,28 @@ type OpaSpec struct {
 	// Enabled indicates whether the OPA sidecar should be included for the application.
 	//
 	// +kubebuilder:validation:Required
-	Enabled           bool              `json:"enabled"`
-	GithubCredentials GithubCredentials `json:"githubCredentials,omitempty"`
-	BundlePublicKey   string            `json:"bundlePublicKey,omitempty"`
+	Enabled bool `json:"enabled"`
 
-	// BundleResource is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle:latest.
-	BundleResource string `json:"bundleResource,omitempty"`
-}
+	// GithubToken is a reference to the Secret and key containing the GitHub token.
+	//
+	// +kubebuilder:validation:Required
+	GithubToken corev1.SecretKeySelector `json:"githubToken"`
 
-type GithubCredentials struct {
-	ClientTokenKey string `json:"clientTokenKey"` // --> "github_token"
-	ClientTokenRef string `json:"clientTokenRef"` // --> "opa-github-secret"
+	// BundlePublicKey is a reference to the ConfigMap and key containing the public key
+	// used to verify bundle signatures.
+	//
+	// +kubebuilder:validation:Required
+	BundlePublicKey corev1.ConfigMapKeySelector `json:"bundlePublicKey"`
+
+	// BundlePath is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle.
+	//
+	// +kubebuilder:validation:Optional
+	BundlePath string `json:"bundlePath,omitempty"`
+
+	// BundleVersion is the tag or digest for the bundle reference, e.g. v3.0.1.
+	//
+	// +kubebuilder:validation:Optional
+	BundleVersion string `json:"bundleVersion,omitempty"`
 }
 
 // SecurityConfigStatus defines the observed state of SecurityConfig.
