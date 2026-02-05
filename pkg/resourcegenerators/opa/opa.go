@@ -2,7 +2,6 @@ package opa
 
 import (
 	_ "embed"
-	"fmt"
 
 	"gopkg.in/yaml.v3"
 
@@ -40,8 +39,8 @@ type Credentials struct {
 }
 
 type Bearer struct {
-	Scheme string `yaml:"scheme"`
-	Token  string `yaml:"token"`
+	Scheme string       `yaml:"scheme"`
+	Token  QuotedString `yaml:"token"`
 }
 
 type Bundle struct {
@@ -61,13 +60,23 @@ type Signing struct {
 }
 
 type Key struct {
-	Algorithm string `yaml:"algorithm"`
-	Key       string `yaml:"key"`
+	Algorithm string       `yaml:"algorithm"`
+	Key       QuotedString `yaml:"key"`
+}
+
+type QuotedString string
+
+func (q QuotedString) MarshalYAML() (interface{}, error) {
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Value: string(q),
+		Style: yaml.DoubleQuotedStyle,
+	}, nil
 }
 
 func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
-	githubTokenVar := fmt.Sprintf("${%s}", utilities.OpaGithubTokenEnvVar)
-	publicKeyVar := fmt.Sprintf("${%s}", utilities.OpaPublicKeyEnvVar)
+	githubTokenVar := QuotedString("${" + utilities.OpaGithubTokenEnvVar + "}")
+	publicKeyVar := QuotedString("${" + utilities.OpaPublicKeyEnvVar + "}")
 
 	cfg := OPAConfig{
 		Plugins: map[string]EnvoyExtAuthzGrpc{
@@ -110,17 +119,17 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		},
 	}
 
-	y, _ := yaml.Marshal(cfg)
-	// if err != nil {
-	//	return nil
-	// }
+	configYAML, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil
+	}
 
-	cm := &corev1.ConfigMap{
+	configMap := &corev1.ConfigMap{
 		ObjectMeta: objectMeta,
 		Data: map[string]string{
-			utilities.OpaConfigFileName: string(y),
+			utilities.OpaConfigFileName: string(configYAML),
 		},
 	}
 
-	return cm
+	return configMap
 }
