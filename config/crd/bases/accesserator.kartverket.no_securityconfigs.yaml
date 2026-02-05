@@ -50,10 +50,26 @@ spec:
               opa:
                 description: OpaSpec defines the configuration for OPA sidecar.
                 properties:
+                  bundlePublicKey:
+                    type: string
+                  bundleResource:
+                    description: BundleResource is the OCI bundle reference, e.g.
+                      ghcr.io/org/opa-bundle:latest.
+                    type: string
                   enabled:
                     description: Enabled indicates whether the OPA sidecar should
                       be included for the application.
                     type: boolean
+                  githubCredentials:
+                    properties:
+                      clientTokenKey:
+                        type: string
+                      clientTokenRef:
+                        type: string
+                    required:
+                    - clientTokenKey
+                    - clientTokenRef
+                    type: object
                 required:
                 - enabled
                 type: object

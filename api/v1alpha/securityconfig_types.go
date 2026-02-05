@@ -57,7 +57,17 @@ type OpaSpec struct {
 	// Enabled indicates whether the OPA sidecar should be included for the application.
 	//
 	// +kubebuilder:validation:Required
-	Enabled bool `json:"enabled"`
+	Enabled           bool              `json:"enabled"`
+	GithubCredentials GithubCredentials `json:"githubCredentials,omitempty"`
+	BundlePublicKey   string            `json:"bundlePublicKey,omitempty"`
+
+	// BundleResource is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle:latest.
+	BundleResource string `json:"bundleResource,omitempty"`
+}
+
+type GithubCredentials struct {
+	ClientTokenKey string `json:"clientTokenKey"` // --> "github_token"
+	ClientTokenRef string `json:"clientTokenRef"` // --> "opa-github-secret"
 }
 
 // SecurityConfigStatus defines the observed state of SecurityConfig.
