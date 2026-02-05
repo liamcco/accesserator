@@ -15,7 +15,7 @@ import (
 func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securityConfig v1alpha.SecurityConfig) (*state.Scope, error) {
 	tokenXEnabled := securityConfig.Spec.Tokenx != nil && securityConfig.Spec.Tokenx.Enabled
 	opaConfigEnabled := securityConfig.Spec.Opa != nil && securityConfig.Spec.Opa.Enabled
-	bundleUrl := securityConfig.Spec.Opa.BundleResource
+	bundleUrl := securityConfig.Spec.Opa.BundlePath + ":" + securityConfig.Spec.Opa.BundleVersion
 
 	if !tokenXEnabled {
 		return &state.Scope{
