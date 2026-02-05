@@ -2,10 +2,12 @@ package opa
 
 import (
 	_ "embed"
+	"fmt"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/kartverket/accesserator/internal/state"
+	"github.com/kartverket/accesserator/pkg/utilities"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -64,6 +66,9 @@ type Key struct {
 }
 
 func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
+	githubTokenVar := fmt.Sprintf("${%s}", utilities.OpaGithubTokenEnvVar)
+	publicKeyVar := fmt.Sprintf("${%s}", utilities.OpaPublicKeyEnvVar)
+
 	cfg := OPAConfig{
 		Plugins: map[string]EnvoyExtAuthzGrpc{
 			"envoy_ext_authz_grpc": {
@@ -79,7 +84,7 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 				Credentials: Credentials{
 					Bearer: Bearer{
 						Scheme: "Bearer",
-						Token:  "${GITHUB_TOKEN}",
+						Token:  githubTokenVar,
 					},
 				},
 			},
@@ -100,7 +105,7 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		Keys: map[string]Key{
 			"bundle-verification-key": {
 				Algorithm: "RS256",
-				Key:       "${OPA_PUBLIC_KEY}",
+				Key:       publicKeyVar,
 			},
 		},
 	}
@@ -113,7 +118,7 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: objectMeta,
 		Data: map[string]string{
-			"config.yaml": string(y),
+			utilities.OpaConfigFileName: string(y),
 		},
 	}
 
