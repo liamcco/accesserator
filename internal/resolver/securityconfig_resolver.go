@@ -15,6 +15,7 @@ import (
 func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securityConfig v1alpha.SecurityConfig) (*state.Scope, error) {
 	tokenXEnabled := securityConfig.Spec.Tokenx != nil && securityConfig.Spec.Tokenx.Enabled
 	opaConfigEnabled := securityConfig.Spec.Opa != nil && securityConfig.Spec.Opa.Enabled
+	bundleUrl := securityConfig.Spec.Opa.BundleResource
 
 	if !tokenXEnabled {
 		return &state.Scope{
@@ -23,7 +24,8 @@ func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securit
 				Enabled: tokenXEnabled,
 			},
 			OpaConfig: state.OpaConfig{
-				Enabled: opaConfigEnabled,
+				Enabled:   opaConfigEnabled,
+				BundleUrl: bundleUrl,
 			},
 		}, nil
 	}
@@ -54,7 +56,8 @@ func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securit
 			AccessPolicy: skiperatorAccessPolicy,
 		},
 		OpaConfig: state.OpaConfig{
-			Enabled: opaConfigEnabled,
+			Enabled:   opaConfigEnabled,
+			BundleUrl: bundleUrl,
 		},
 	}, nil
 }
