@@ -21,9 +21,11 @@ jobs:
         run: |
           set -euo pipefail
           go version
-          if ! go test ./... -coverprofile=coverage.out >/dev/null 2>test.err; then
+          if ! go test ./... -coverprofile=coverage.out >test.out 2>test.err; then
+            echo "go test failed (PR). stdout:";
+            cat test.out || true;
             echo "go test failed (PR). stderr:";
-            cat test.err;
+            cat test.err || true;
             exit 1;
           fi
           if [ ! -s coverage.out ]; then
@@ -53,10 +55,11 @@ jobs:
         working-directory: main
         run: |
           set -euo pipefail
-          go version
-          if ! go test ./... -coverprofile=coverage.out >/dev/null 2>test.err; then
+          if ! go test ./... -coverprofile=coverage.out >test.out 2>test.err; then
+            echo "go test failed (main). stdout:";
+            cat test.out || true;
             echo "go test failed (main). stderr:";
-            cat test.err;
+            cat test.err || true;
             exit 1;
           fi
           if [ ! -s coverage.out ]; then
