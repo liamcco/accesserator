@@ -80,7 +80,7 @@ clean:
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	"$(CONTROLLER_GEN)" rbac:roleName=accesserator crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases output:webhook:artifacts:config=config/webhook
+	"$(CONTROLLER_GEN)" rbac:roleName=accesserator crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases output:webhook:artifacts:config=config/webhook/bases
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
