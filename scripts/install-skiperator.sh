@@ -3,6 +3,7 @@
 KUBECONTEXT=${KUBECONTEXT:-"kind-accesserator"}
 SKIPERATOR_VERSION=${SKIPERATOR_VERSION:-"v2.8.4"}
 PROMETHEUS_VERSION=${PROMETHEUS_VERSION:-"v0.84.0"}
+KUBECTL_BIN="${KUBECTL_BIN:-./bin/kubectl}"
 
 SKIPERATOR_RESOURCES=(
   https://raw.githubusercontent.com/kartverket/skiperator/${SKIPERATOR_VERSION}/config/crd/skiperator.kartverket.no_applications.yaml
@@ -18,7 +19,7 @@ SKIPERATOR_RESOURCES=(
 echo "🤞  Creating namespace: $namespace_name"
 
 # Attempt to create the namespace and capture both stdout and stderr
-output=$(kubectl create namespace "skiperator-system" 2>&1)
+output=$("${KUBECTL_BIN}" create namespace "skiperator-system" 2>&1)
 exit_code=$?
 
 # Check the exit code and output
@@ -33,7 +34,7 @@ fi
 
 # Install required skiperator resources
 for resource in "${SKIPERATOR_RESOURCES[@]}"; do
-  kubectl apply --context "$KUBECONTEXT" -f "$resource"
+  "${KUBECTL_BIN}" apply --context "$KUBECONTEXT" -f "$resource"
 done
 
 # Install skiperator
@@ -130,4 +131,4 @@ spec:
 EOF
 )"
 
-kubectl apply -f <(echo "$SKIPERATOR_MANIFESTS") --context "$KUBECONTEXT"
+"${KUBECTL_BIN}" apply -f <(echo "$SKIPERATOR_MANIFESTS") --context "$KUBECONTEXT"
