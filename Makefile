@@ -56,13 +56,13 @@ run-local: ensurelocal ensureaccesseratornotdeployed generate install webhooks s
 	go run ./cmd/main.go -webhook-cert-path=./webhook-certs
 
 .PHONY: isrunning
-isrunning:
+isrunning: ## Check if accesserator is running on your host machine (i.e. from IDE or with 'make run-local')
 	@echo "Checking if accesserator is running..."
 	@lsof -i :8081 > /dev/null || (echo "❌ accesserator is not running. Please start it first either in your IDE or with 'make run-local'." && exit 1)
 	@echo "✅ accesserator is running."
 
 .PHONY: isnotrunning
-isnotrunning:
+isnotrunning: ## Check if accesserator is NOT running on your host machine (i.e. from IDE or with 'make run-local')
 	@echo "Checking if accesserator is not running..."
 	@lsof -i :8081 > /dev/null || (echo "✅ accesserator is not running on your host. Ready to deploy." && exit 0 || echo "❌ accesserator is running on your host. Please stop it first." && exit 1)
 	@echo "✅ accesserator is not running."
@@ -75,7 +75,7 @@ sourceenv: ## Source environment variables from .env file
 local: cluster accesserator-namespace cert-manager istio-gateways skiperator tokendings jwker ztoperator mock-oauth2 generate install ## Set up entire local development environment with external dependencies
 
 .PHONY: clean
-clean:
+clean: ## Clean up local environment by deleting kind cluster
 	"$(KIND)" delete cluster --name $(KIND_CLUSTER_NAME)
 
 .PHONY: generate
@@ -162,7 +162,7 @@ deploy: ensurelocal isnotrunning accesserator-namespace generate install kustomi
 	"$(KUSTOMIZE)" build config/manager | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -
 
 .PHONY: undeploy
-undeploy: kustomize
+undeploy: kustomize ## Undeploy accesserator and all the resources deployed by accesserator to the kind cluster. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	@out="$$( "$(KUSTOMIZE)" build config/webhook 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No Webhook configurations to delete; skipping."; fi
 	@out="$$( "$(KUSTOMIZE)" build config/manager 2>/dev/null || true )"; \
@@ -200,7 +200,7 @@ cluster: kind ## Create Kind cluster with kube context kind-accesserator
 ##@ Namespace
 
 .PHONY: accesserator-namespace
-accesserator-namespace: kubectl
+accesserator-namespace: kubectl ## Create accesserator-system namespace in the cluster
 	@/bin/bash ./scripts/create-accesserator-namespace.sh
 
 ##@ Operators
@@ -249,7 +249,7 @@ istio-gateways: istiohelm install-istio ## Install istio gateways
 	@echo "✅  Istio gateways installed."
 
 .PHONY: cert-manager
-cert-manager: kustomize kubectl
+cert-manager: kustomize kubectl ## Install cert-manager to the cluster
 	@echo -e "🤞  Installing cert-manager..."
 	"$(KUBECTL)" apply -f https://github.com/cert-manager/cert-manager/releases/download/v$(CERT_MANAGER_VERSION)/cert-manager.yaml
 	@echo "🕑  Waiting for cert-manager to be ready..."
@@ -290,7 +290,7 @@ mock-token: ensureflox ensurekubefwd ## Retrieves a JWT issued by mock-oauth2
 	echo "$$token"
 
 .PHONY: ensurelocal
-ensurelocal: kind kubectl
+ensurelocal: kind kubectl ## Ensure local environment is set up with necessary tools and kind cluster is running
 	@/bin/bash ./scripts/ensure-local-setup.sh
 
 .PHONY: ensureaccesseratornotdeployed
@@ -450,7 +450,7 @@ $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{
 endef
 
 ### CUSTOM TARGETS ###
-ensureflox:
+ensureflox: ## Ensure Flox is installed and activated
 	@if ! command -v "flox" >/dev/null 2>&1; then \
 		echo -e "❌  Flox is not installed. Please install Flox (https://flox.dev/docs/install-flox/) and try again."; \
 		exit 1; \
@@ -459,7 +459,7 @@ ifndef FLOX_ENV
 	echo -e "❌  Flox is not activated. Please activate flox with 'flox activate' and try again." && exit 1
 endif
 
-ensurekubefwd:
+ensurekubefwd: ensureflox ## Ensure kubefwd is installed and running
 	@pgrep -f "kubefwd( |$$)" >/dev/null 2>&1 || { \
 		echo -e "❌  kubefwd is not running."; \
 		echo -e "    Start it in another terminal with:"; \
