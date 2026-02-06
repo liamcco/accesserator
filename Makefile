@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= accesserator:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -43,6 +43,7 @@ KIND_CLUSTER_NAME          ?= accesserator
 KUBECONTEXT                ?= kind-$(KIND_CLUSTER_NAME)
 ISTIO_VERSION 				= 1.28.0
 CERT_MANAGER_VERSION		= 1.19.2
+LOCAL_WEBHOOK_CERTS_DIR	   ?= webhook-certs
 
 .PHONY: help
 help: ## Display this help.
@@ -50,20 +51,36 @@ help: ## Display this help.
 
 ##@ Development
 
+.PHONY: run-local
+run-local: ensurelocal ensureaccesseratornotdeployed generate install webhooks sourceenv ## Run Accesserator from your host.
+	go run ./cmd/main.go -webhook-cert-path=./webhook-certs
+
+.PHONY: isrunning
+isrunning:
+	@echo "Checking if accesserator is running..."
+	@lsof -i :8081 > /dev/null || (echo "❌ accesserator is not running. Please start it first either in your IDE or with 'make run-local'." && exit 1)
+	@echo "✅ accesserator is running."
+
+.PHONY: isnotrunning
+isnotrunning:
+	@echo "Checking if accesserator is not running..."
+	@lsof -i :8081 > /dev/null || (echo "✅ accesserator is not running on your host. Ready to deploy." && exit 0 || echo "❌ accesserator is running on your host. Please stop it first." && exit 1)
+	@echo "✅ accesserator is not running."
+
+.PHONY: sourceenv
+sourceenv: ## Source environment variables from .env file
+	@set -a; [ -f .env ] && . .env; set +a
+
 .PHONY: local
-local: ensureflox cluster cert-manager istio skiperator tokendings jwker ztoperator mock-oauth2 generate install ## Set up entire local development environment with external dependencies
+local: cluster accesserator-namespace cert-manager istio-gateways skiperator tokendings jwker ztoperator mock-oauth2 generate install ## Set up entire local development environment with external dependencies
 
 .PHONY: clean
-clean: ensureflox
-	@kind delete cluster --name $(KIND_CLUSTER_NAME)
-
-.PHONY: manifests
-manifests: controller-gen ## Generate ClusterRole and CustomResourceDefinition objects.
-	"$(CONTROLLER_GEN)" rbac:roleName=accesserator crd paths="./..." output:crd:artifacts:config=config/crd/bases
+clean:
+	"$(KIND)" delete cluster --name $(KIND_CLUSTER_NAME)
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	"$(CONTROLLER_GEN)" rbac:roleName=accesserator crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases output:webhook:artifacts:config=config/webhook
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -74,37 +91,23 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+test: generate fmt vet setup-envtest ## Run go tests.
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./...) -coverprofile cover.out
 
-# TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
-# CertManager is installed by default; skip with:
-# - CERT_MANAGER_INSTALL_SKIP=true
-KIND_TEST_CLUSTER ?= accesserator-test-e2e
+.PHONY: chainsaw-test-remote
+chainsaw-test-remote: chainsaw ensureaccesseratordeployed ## Run chainsaw tests against local kind cluster with accesserator running in the cluster
+	"$(CHAINSAW)" test --kube-context $(KUBECONTEXT) --config test/chainsaw/config.yaml --test-dir test/chainsaw/securityconfig && \
+        echo "✅ Tests succeeded" || (echo "❌ Tests failed" && exit 1)
 
-.PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_TEST_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_TEST_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_TEST_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_TEST_CLUSTER) ;; \
-	esac
+.PHONY: chainsaw-test-host
+chainsaw-test-host: chainsaw install ensurelocal ensureaccesseratornotdeployed isrunning ## Run chainsaw tests against local kind cluster with accesserator running on host
+	"$(CHAINSAW)" test --kube-context $(KUBECONTEXT) --config test/chainsaw/config.yaml --test-dir test/chainsaw/securityconfig && \
+        echo "✅ Tests succeeded" || (echo "❌ Tests failed" && exit 1)
 
-.PHONY: test-e2e
-test-e2e: ensureflox setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_TEST_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
-
-.PHONY: cleanup-test-e2e
-cleanup-test-e2e: ensureflox ## Tear down the Kind cluster used for e2e tests
-	@$(KIND) delete cluster --name $(KIND_TEST_CLUSTER)
+.PHONY: chainsaw-test-host-single
+chainsaw-test-host-single: chainsaw install ensurelocal ensureaccesseratornotdeployed isrunning ## Run a specific chainsaw test against local kind cluster with accesserator running on host. Example usage: chainsaw-test-host-single dir=<CHAINSAW_TEST_DIR>
+	"$(CHAINSAW)" test --kube-context $(KUBECONTEXT) --config test/chainsaw/config.yaml --test-dir test/chainsaw/securityconfig/$(dir) && \
+    	echo "✅ Test succeeded" || (echo "❌ Test failed" && exit 1)
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -117,12 +120,8 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
+build: generate fmt vet ## Build manager binary.
 	go build -o bin/accesserator cmd/main.go
-
-.PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -154,77 +153,94 @@ ifndef ignore-not-found
   ignore-not-found = false
 endif
 
+.PHONY: deploy
+deploy: ensurelocal isnotrunning accesserator-namespace generate install kustomize docker-build ## Deploy accesserator and all the required resources for accesserator to run properly to the kind cluster
+	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
+	"$(KIND)" load docker-image ${IMG} --name $(KIND_CLUSTER_NAME)
+	"$(KUSTOMIZE)" build config/webhook | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -
+	"$(KUSTOMIZE)" build config/manager | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -
+
+.PHONY: undeploy
+undeploy: kustomize
+	@out="$$( "$(KUSTOMIZE)" build config/webhook 2>/dev/null || true )"; \
+	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No Webhook configurations to delete; skipping."; fi
+	@out="$$( "$(KUSTOMIZE)" build config/manager 2>/dev/null || true )"; \
+	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No manager resources to delete; skipping."; fi
+
 .PHONY: webhooks
-webhooks: kustomize ## Patch mutating and validating webhook with ephemeral CA bundle
-	@/bin/bash ./scripts/create-webhook-certs.sh
-	@CABUNDLE=$$(tr -d '\n' < webhook-certs/caBundle); \
-	$(KUBECTL) --context $(KUBECONTEXT) patch mutatingwebhookconfiguration accesserator-mutating-webhook-configuration --type='json' -p="[{\"op\":\"replace\",\"path\":\"/webhooks/0/clientConfig/caBundle\",\"value\":\"$$CABUNDLE\"}]"; \
-	$(KUBECTL) --context $(KUBECONTEXT) patch validatingwebhookconfiguration accesserator-validating-webhook-configuration --type='json' -p="[{\"op\":\"replace\",\"path\":\"/webhooks/0/clientConfig/caBundle\",\"value\":\"$$CABUNDLE\"}]"
+webhooks: kustomize ## Extract webhook certificate details
+	@/bin/bash ./scripts/get-webhook-certs.sh
 
 .PHONY: install
-install: manifests kustomize ## Install CRDs, Webhook configurations and ClusterRoles into the K8s cluster specified in ~/.kube/config.
+install: kustomize generate ## Install CRDs, Webhook configurations and ClusterRoles into the K8s cluster specified in ~/.kube/config.
 	@out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -; else echo "No CRDs to install; skipping."; fi
 	@out="$$( "$(KUSTOMIZE)" build config/rbac 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -; else echo "No ClusterRoles to install; skipping."; fi
-	@out="$$( "$(KUSTOMIZE)" build config/webhook 2>/dev/null || true )"; \
+	@out="$$( "$(KUSTOMIZE)" build config/webhook-local 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -; else echo "No Webhook configurations to install; skipping."; fi
 
 .PHONY: uninstall
-uninstall: ensureflox manifests kustomize ## Uninstall CRDs, Webhook configurations and ClusterRoles from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+uninstall: generate kustomize kubectl ## Uninstall CRDs, Webhook configurations and ClusterRoles from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	@out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
 	@out="$$( "$(KUSTOMIZE)" build config/rbac 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No ClusterRoles to delete; skipping."; fi
-	@out="$$( "$(KUSTOMIZE)" build config/webhook 2>/dev/null || true )"; \
+	@out="$$( "$(KUSTOMIZE)" build config/webhook-local 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No Webhook configurations to delete; skipping."; fi
 
 ##@ Cluster
 
 .PHONY: cluster
-cluster: ensureflox ## Create Kind cluster with kube context kind-accesserator
+cluster: kind ## Create Kind cluster with kube context kind-accesserator
 	@echo Create kind cluster... >&2
-	@kind create cluster --image $(KIND_IMAGE) --name ${KIND_CLUSTER_NAME}
+	"$(KIND)" create cluster --image $(KIND_IMAGE) --name ${KIND_CLUSTER_NAME}
+
+##@ Namespace
+
+.PHONY: accesserator-namespace
+accesserator-namespace: kubectl
+	@/bin/bash ./scripts/create-accesserator-namespace.sh
 
 ##@ Operators
 
 .PHONY: install-jwker-crds
-install-jwker-crds: ensureflox ## Installing Jwker CRDs
+install-jwker-crds: ## Installing Jwker CRDs
 	@echo -e "🤞  Installing jwker crds..."
-	@kubectl apply -f https://raw.githubusercontent.com/nais/liberator/main/config/crd/bases/nais.io_jwkers.yaml --context $(KUBECONTEXT)
+	"$(KUBECTL)" apply -f https://raw.githubusercontent.com/nais/liberator/main/config/crd/bases/nais.io_jwkers.yaml --context $(KUBECONTEXT)
 
 .PHONY: jwker
-jwker: ensureflox install-jwker-crds ## Installing Jwker on k8s cluster
+jwker: install-jwker-crds ## Installing Jwker on k8s cluster
 	@echo -e "🤞  Installing Jwker..."
 	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash scripts/install-jwker.sh
-	@kubectl wait pod --for=create --timeout=60s -n obo -l app=jwker --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Jwker." && exit 1; }
-	@kubectl wait pod --for=condition=Ready --timeout=60s -n obo -l app=jwker --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Jwker." && exit 1; }
+	"$(KUBECTL)" wait pod --for=create --timeout=60s -n obo -l app=jwker --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Jwker." && exit 1; }
+	"$(KUBECTL)" wait pod --for=condition=Ready --timeout=60s -n obo -l app=jwker --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Jwker." && exit 1; }
 	@echo -e "✅  Jwker installed in namespace 'obo'!"
 
 .PHONY: skiperator
-skiperator: ensureflox ## Install Skiperator on k8s cluster
+skiperator: ## Install Skiperator on k8s cluster
 	@echo -e "🤞  Installing Skiperator..."
 	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash ./scripts/install-skiperator.sh
-	@kubectl wait pod --for=condition=ready --timeout=30s -n skiperator-system -l app=skiperator --context $(KUBECONTEXT) || (echo -e "❌  Error deploying Skiperator." && exit 1)
+	"$(KUBECTL)" wait pod --for=condition=ready --timeout=30s -n skiperator-system -l app=skiperator --context $(KUBECONTEXT) || (echo -e "❌  Error deploying Skiperator." && exit 1)
 	@echo -e "✅  Skiperator installed in namespace 'skiperator-system'!"
 
 .PHONY: ztoperator
-ztoperator: ensureflox ## Install Ztoperator on k8s cluster
+ztoperator: ## Install Ztoperator on k8s cluster
 	@echo -e "🤞  Installing Ztoperator..."
 	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash ./scripts/install-ztoperator.sh
-	@kubectl wait pod --for=condition=ready --timeout=30s -n ztoperator-system -l app=ztoperator --context $(KUBECONTEXT) || (echo -e "❌  Error deploying Ztoperator." && exit 1)
+	"$(KUBECTL)" wait pod --for=condition=ready --timeout=30s -n ztoperator-system -l app=ztoperator --context $(KUBECONTEXT) || (echo -e "❌  Error deploying Ztoperator." && exit 1)
 	@echo -e "✅  Ztoperator installed in namespace 'ztoperator-system'!"
 
 .PHONY: install-istio
-install-istio: ensureflox ## Install istio
+install-istio: ## Install istio
 	@echo "⬇️ Downloading Istio..."
 	@curl -L https://istio.io/downloadIstio | ISTIO_VERSION=$(ISTIO_VERSION) TARGET_ARCH=$(ARCH) sh -
 	@echo "⛵️  Installing Istio on Kubernetes cluster..."
 	@./istio-$(ISTIO_VERSION)/bin/istioctl install --context $(KUBECONTEXT) -y --set meshConfig.accessLogFile=/dev/stdout --set profile=minimal &> /dev/null
 	@echo "✅  Istio installation complete."
 
-.PHONY: istio
-istio: ensureflox helm install-istio ## Install istio gateways
+.PHONY: istio-gateways
+istio-gateways: istiohelm install-istio ## Install istio gateways
 	@echo "⛵️ Creating istio-gateways namespace..."
 	@kubectl create namespace istio-gateways --context $(KUBECONTEXT) &> /dev/null || true
 	@echo "⬇️  Installing istio-gateways"
@@ -232,26 +248,27 @@ istio: ensureflox helm install-istio ## Install istio gateways
 	@echo "✅  Istio gateways installed."
 
 .PHONY: cert-manager
-cert-manager: ensureflox
+cert-manager: kustomize kubectl
 	@echo -e "🤞  Installing cert-manager..."
-	@kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v$(CERT_MANAGER_VERSION)/cert-manager.yaml
+	"$(KUBECTL)" apply -f https://github.com/cert-manager/cert-manager/releases/download/v$(CERT_MANAGER_VERSION)/cert-manager.yaml
 	@echo "🕑  Waiting for cert-manager to be ready..."
-	@kubectl -n cert-manager wait deploy --all --for=condition=Available --timeout=60s
-	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash ./scripts/create-cluster-issuer.sh
+	"$(KUBECTL)"n cert-manager wait deploy --all --for=condition=Available --timeout=60s
 	@echo -e "✅  Cert-manager installed!"
+	@out="$$( "$(KUSTOMIZE)" build config/cert-manager 2>/dev/null || true )"; \
+	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -; else echo "No cert manager resources to install; skipping."; fi
 
 ##@ Helper services
 
 .PHONY: tokendings
-tokendings: ensureflox ## Deploying tokendings oauth authorization server
+tokendings: ## Deploying tokendings oauth authorization server
 	@echo -e "🤞  Setting up Tokendings..."
 	@KUBECONTEXT=$(KUBECONTEXT) /bin/bash scripts/install-tokendings.sh
-	@kubectl wait pod --for=create --timeout=60s -n obo -l app=tokendings --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Tokendings." && exit 1; }
-	@kubectl wait pod --for=condition=Ready --timeout=60s -n obo -l app=tokendings --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Tokendings." && exit 1; }
+	"$(KUBECTL)" wait pod --for=create --timeout=60s -n obo -l app=tokendings --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Tokendings." && exit 1; }
+	"$(KUBECTL)" wait pod --for=condition=Ready --timeout=60s -n obo -l app=tokendings --context $(KUBECONTEXT) &> /dev/null || { echo -e "❌  Error deploying Tokendings." && exit 1; }
 	@echo -e "✅  Tokendings installed in namespace 'obo'!"
 
 .PHONY: mock-oauth2
-mock-oauth2: ensureflox ## Deployinh Mock-OAuth service in auth namespace
+mock-oauth2: ## Deployinh Mock-OAuth service in auth namespace
 	@echo -e "🤞  Deploying 'mock-oauth2'..."
 	@KUBECONTEXT=$(KUBECONTEXT) MOCK_OAUTH2_CONFIG=scripts/mock-oauth2-server-config.json /bin/bash ./scripts/install-mock-oauth2.sh
 	@echo -e "✅  'mock-oauth2' is ready and running"
@@ -275,15 +292,23 @@ mock-token: ensureflox ensurekubefwd ## Retrieves a JWT issued by mock-oauth2
 ensurelocal: kind kubectl
 	@/bin/bash ./scripts/ensure-local-setup.sh
 
+.PHONY: ensureaccesseratornotdeployed
+ensureaccesseratornotdeployed: kubectl ## Ensure accesserator is NOT deployed in the kind cluster
+	"$(KUBECTL)" -n accesserator-system get deployment accesserator >/dev/null 2>&1 && (echo "❌ Accesserator IS deployed to the cluster" && exit 1) || (echo "✅ Accesserator IS NOT deployed to the cluster" && exit 0)
+
+.PHONY: ensureaccesseratordeployed
+ensureaccesseratordeployed: kubectl ensurelocal isnotrunning ## Ensure accesserator is deployed in the kind cluster
+	@/bin/bash ./scripts/ensure-accesserator-deployed.sh || (echo "❌ Accesserator resources are not deployed correctly to the cluster. To fix it, run 'make deploy'." && exit 1)
+
 ##@ Dependencies
 
-.PHONY: helm
-helm: ## Fetch helm charts for Istio
+.PHONY: istiohelm
+istiohelm: helm ## Fetch helm charts for Istio
 	# Ensure istio helm repo exists
-	@helm repo list | grep -q '^istio\s' || (echo "Adding istio helm repo..." && helm repo add istio https://istio-release.storage.googleapis.com/charts)
+	"$(HELM)" repo list | grep -q '^istio\s' || (echo "Adding istio helm repo..." && helm repo add istio https://istio-release.storage.googleapis.com/charts)
 	# Make sure the requested ISTIO_VERSION is available; update index if not
-	@helm search repo istio/gateway --versions | grep -q "$(ISTIO_VERSION)" || (echo "Updating Helm repos to fetch Istio charts..." && helm repo update)
-	@helm search repo istio/gateway --versions | grep -q "$(ISTIO_VERSION)" || (echo "❌ Istio Helm chart version $(ISTIO_VERSION) not found in repo index." && echo "   Tip: check available versions with: helm search repo istio/gateway --versions" && exit 1)
+	"$(HELM)" search repo istio/gateway --versions | grep -q "$(ISTIO_VERSION)" || (echo "Updating Helm repos to fetch Istio charts..." && helm repo update)
+	"$(HELM)" search repo istio/gateway --versions | grep -q "$(ISTIO_VERSION)" || (echo "❌ Istio Helm chart version $(ISTIO_VERSION) not found in repo index." && echo "   Tip: check available versions with: helm search repo istio/gateway --versions" && exit 1)
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
@@ -294,15 +319,20 @@ $(LOCALBIN):
 KUBECTL ?= $(LOCALBIN)/kubectl
 KIND ?= $(LOCALBIN)/kind
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
+CHAINSAW ?= $(LOCALBIN)/chainsaw
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+HELM ?= $(LOCALBIN)/helm
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
+CHAINSAW_VERSION ?= v0.2.14
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 KUBECTL_VERSION ?= v1.34.2
 KIND_VERSION ?= v0.30.0
+GOLANGCI_LINT_VERSION ?= v2.5.0
+HELM_VERSION ?= v4.0.0
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -314,7 +344,6 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   [ -n "$$v" ] || { echo "Set ENVTEST_K8S_VERSION manually (k8s.io/api replace has no tag)" >&2; exit 1; }; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 
-GOLANGCI_LINT_VERSION ?= v2.5.0
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
@@ -329,6 +358,35 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
+
+.PHONY: helm
+helm: $(HELM) ## Download helm locally if necessary.
+$(HELM): $(LOCALBIN)
+	@set -e; \
+	if [ -x "$(HELM)" ]; then \
+		echo "✅ helm already exists at $(HELM)"; \
+		exit 0; \
+	fi; \
+	os=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	arch=$$(uname -m); \
+	case "$$arch" in \
+		x86_64|amd64) arch=amd64 ;; \
+		aarch64|arm64) arch=arm64 ;; \
+		armv7l) arch=arm ;; \
+		*) echo "❌ Unsupported architecture: $$arch" >&2; exit 1 ;; \
+	esac; \
+	url="https://get.helm.sh/helm-$(HELM_VERSION)-$${os}-$${arch}.tar.gz"; \
+	echo "Downloading helm $(HELM_VERSION) from $$url"; \
+	curl -L -o helm.tar.gz "$$url"; \
+	tar -xzf helm.tar.gz -C "$(LOCALBIN)" --strip-components=1 --no-same-owner "*/helm"; \
+	chmod +x "$(HELM)"; \
+	rm helm.tar.gz; \
+	echo "✅ helm installed at $(HELM)"
+
+.PHONY: chainsaw
+chainsaw: $(CHAINSAW) ## Download chainsaw locally if necessary.
+$(CHAINSAW): $(LOCALBIN)
+	$(call go-install-tool,$(CHAINSAW),github.com/kyverno/chainsaw,$(CHAINSAW_VERSION))
 
 .PHONY: kubectl
 kubectl: $(KUBECTL) ## Download kubectl locally if necessary.
@@ -407,3 +465,4 @@ ensurekubefwd:
 		echo -e "      sudo kubefwd svc -n <namespace> --context $(KUBECONTEXT)"; \
 		exit 1; \
 	}
+
