@@ -1,19 +1,3 @@
-/*
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controller
 
 import (
@@ -22,8 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kartverket/accesserator/pkg/config"
+	"github.com/kartverket/skiperator/api/v1alpha1"
+	naisiov1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -59,14 +47,33 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
+	err = corev1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 	err = accesseratorv1alpha.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = v1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = naisiov1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Load environment variables
+	err = os.Setenv("ACCESSERATOR_CLUSTER_NAME", "test-cluster")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ACCESSERATOR_TOKENX_NAME", "test-name")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ACCESSERATOR_TOKENX_NAMESPACE", "test-namespace")
+	Expect(err).NotTo(HaveOccurred())
+	err = config.Load()
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "hack", "crd", "bases"),
+		},
 		ErrorIfCRDPathMissing: true,
 	}
 
