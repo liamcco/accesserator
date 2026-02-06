@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/name: accesserator
+  name: webhook-cert
+  namespace: accesserator-system
+spec:
+  dnsNames:
+    - webhook-service.accesserator-system.svc
+    - webhook-service.accesserator-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: webhook-selfsigned
+  secretName: webhook-server-cert
