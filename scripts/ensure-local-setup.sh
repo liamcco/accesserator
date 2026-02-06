@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -eo pipefail
 
 # Allow overriding via env, but default to your Makefile defaults
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-accesserator}"
