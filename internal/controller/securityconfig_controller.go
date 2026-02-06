@@ -292,7 +292,7 @@ func (r *SecurityConfigReconciler) updateStatus(
 		}
 
 	case scope.OpaConfig.Enabled:
-		_, getOpaConfigErr := scope.GetOpaConfig(ctx, r.Client) // opaConfigResource
+		_, getOpaConfigErr := scope.GetOpaConfig(ctx, r.Client)
 		if getOpaConfigErr != nil {
 			rLog.Error(
 				getOpaConfigErr,
@@ -302,16 +302,27 @@ func (r *SecurityConfigReconciler) updateStatus(
 				),
 			)
 			r.Recorder.Eventf(&securityConfig, "Error", "StatusUpdateFailed", "Failed to get Opa config resource with name %s.", utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef))
+			if apierrors.IsNotFound(getOpaConfigErr) {
+				securityConfig.Status.SetPhasePending("SecurityConfig pending due to missing Opa config ConfigMap.")
+				statusMsg := fmt.Sprintf(
+					"Opa config ConfigMap %s/%s does not exist",
+					securityConfig.Namespace,
+					utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef),
+				)
+				accesseratorv1alpha.SetConditionPending(&statusCondition, statusMsg)
+			} else {
+				securityConfig.Status.SetPhaseFailed("SecurityConfig failed to fetch Opa config ConfigMap.")
+				statusMsg := fmt.Sprintf(
+					"Failed to fetch Opa config ConfigMap %s/%s",
+					securityConfig.Namespace,
+					utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef),
+				)
+				accesseratorv1alpha.SetConditionFailed(&statusCondition, statusMsg)
+			}
+		} else {
+			securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
+			accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
 		}
-		// Here is where you'd update Status
-		// if opaConfigResource.Status.SynchronizationState != "RolloutComplete" {
-		//	securityConfig.Status.SetPhasePending("SecurityConfig pending due to missing secrets (github_token or opa_public_sign_key).")
-		//  statusMsg:= fmt.Sprintf("Opa config resource with name %s has not finished registering an OAuth client", opaConfigResource.Name)
-		//	accesseratorv1alpha.SetConditionPending(&statusCondition, statusMsg)
-		// } else {
-		securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
-		accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
-		// }
 
 	default:
 		securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
