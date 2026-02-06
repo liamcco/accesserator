@@ -1,19 +1,3 @@
-/*
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1
 
 import (
@@ -26,6 +10,7 @@ import (
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +21,10 @@ import (
 )
 
 const (
+	SkiperatorApplicationRefLabel = "application.skiperator.no/app-name"
+	SecurityEnabledLabelName      = "skiperator/security"
+	SecurityEnabledLabelValue     = "enabled"
+
 	TexasInitContainerName = "texas"
 	TexasPortName          = "http"
 
@@ -47,7 +36,7 @@ const (
 
 // nolint:unused
 // log is for logging in this package.
-var podlog = logf.Log.WithName("pod-resource")
+var podlog = logf.Log.WithName("pod-webhook")
 
 // SetupPodWebhookWithManager registers the webhook for Pod in the manager.
 func SetupPodWebhookWithManager(mgr ctrl.Manager) error {
@@ -107,14 +96,10 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 	return nil
 }
 
-// NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
 // +kubebuilder:webhook:path=/validate--v1-pod,mutating=false,failurePolicy=fail,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=vpod-v1.kb.io,admissionReviewVersions=v1
 
 // PodCustomValidator struct is responsible for validating the Pod resource
 // when it is created, updated, or deleted.
-//
-// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
-// as this struct is used only for temporary operations and does not need to be deeply copied.
 type PodCustomValidator struct {
 	Client client.Client
 }
@@ -127,12 +112,12 @@ func (v *PodCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Obj
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type Pod.
-func (v *PodCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+func (v *PodCustomValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
 	return validatePod(ctx, v.Client, newObj)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type Pod.
-func (v *PodCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *PodCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return nil, fmt.Errorf("expected a Pod object but got %T", obj)
@@ -158,7 +143,7 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	if pod.Labels == nil {
 		return &PodSecurityConfiguration{SecurityEnabled: false}, nil
 	}
-	appName, appNameExists := pod.Labels["application.skiperator.no/app-name"]
+	appName, appNameExists := pod.Labels[SkiperatorApplicationRefLabel]
 	if !appNameExists {
 		return &PodSecurityConfiguration{SecurityEnabled: false}, nil
 	}
@@ -173,10 +158,13 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 		Name:      appName,
 		Namespace: pod.Namespace,
 	}, &skiperatorApplication); err != nil {
-		return nil, fmt.Errorf("failed to fetch Application resource named %s: %w", appName, err)
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("no Application found with the name %s/%s: %w", pod.Namespace, appName, err)
+		}
+		return nil, fmt.Errorf("failed to fetch Application resource named %s/%s: %w", pod.Namespace, appName, err)
 	}
 
-	if skiperatorApplication.Labels["skiperator/security"] != "enabled" {
+	if skiperatorApplication.Labels[SecurityEnabledLabelName] != SecurityEnabledLabelValue {
 		return &PodSecurityConfiguration{
 			AppName:         appName,
 			SecurityEnabled: false,
@@ -197,7 +185,11 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	}
 
 	if len(securityConfigForApplication) < 1 {
-		msg := "the application is labelled with skiperator/security=enabled but no SecurityConfig resource was found for Application"
+		msg := fmt.Sprintf(
+			"the application is labelled with %s=%s but no SecurityConfig resource was found for Application",
+			SecurityEnabledLabelName,
+			SecurityEnabledLabelValue,
+		)
 		podlog.Info(msg, "name", appName)
 		return nil, fmt.Errorf("%s", msg)
 	}
@@ -216,17 +208,24 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 		return nil, fmt.Errorf("%s", msg)
 	}
 
-	texasContainer := getTexasContainer(*securityConfig)
+	texasContainer, err := getTexasContainer(*securityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Texas container: %w", err)
+	}
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
 		AppName:         appName,
 		SecurityEnabled: true,
-		TexasContainer:  texasContainer,
+		TexasContainer:  *texasContainer,
 	}, nil
 }
 
-func getTexasContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
+func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
+	if securityConfig.Spec.Tokenx == nil || !securityConfig.Spec.Tokenx.Enabled {
+		return nil, fmt.Errorf("a texas container should not be created if tokenx is not enabled")
+	}
+
 	texasImageUrl := fmt.Sprintf(
 		"%s:%s",
 		config.Get().TexasImageName,
@@ -236,7 +235,7 @@ func getTexasContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 		utilities.GetJwkerName(securityConfig.Spec.ApplicationRef),
 	)
 
-	return corev1.Container{
+	return &corev1.Container{
 		Name:  TexasInitContainerName,
 		Image: texasImageUrl,
 		Ports: []corev1.ContainerPort{
@@ -286,7 +285,7 @@ func getTexasContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 			},
 		},
 		EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: expectedJwkerSecretName}}}},
-	}
+	}, nil
 }
 
 func validatePod(ctx context.Context, crudClient client.Client, obj runtime.Object) (admission.Warnings, error) {
@@ -351,8 +350,14 @@ func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *Po
 		}
 	}
 	if !hasTexasUrlEnvVar {
-		podlog.Info("TokenX is enabled but TEXAS_URL env var is missing", "container", securityConfigForPod.AppName)
-		return fmt.Errorf("TokenX is enabled but container '%s' is missing environment variable '%s'", securityConfigForPod.AppName, config.Get().TexasUrlEnvVarName)
+		errMsg := fmt.Sprintf(
+			"TokenX is enabled but %s env var is missing for pod from skiperator app with name %s/%s",
+			pod.Namespace,
+			securityConfigForPod.AppName,
+			config.Get().TexasUrlEnvVarName,
+		)
+		podlog.Info(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	return nil
 }
