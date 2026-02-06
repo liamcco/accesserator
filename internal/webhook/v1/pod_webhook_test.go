@@ -72,7 +72,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 				},
 			}
 			c, err := getTexasContainer(securityConfig)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(c.Image).To(Equal(fmt.Sprintf("%s:%s", config.Get().TexasImageName, config.Get().TexasImageTag)))
 			Expect(*c.RestartPolicy).To(Equal(corev1.ContainerRestartPolicyAlways))
 			Expect(c.SecurityContext).ToNot(BeNil())
@@ -103,9 +103,9 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 					ApplicationRef: "myapp",
 				}}
 			a, errA := getTexasContainer(securityConfig)
-			Expect(errA).To(BeNil())
+			Expect(errA).ToNot(HaveOccurred())
 			b, errB := getTexasContainer(securityConfig)
-			Expect(errB).To(BeNil())
+			Expect(errB).ToNot(HaveOccurred())
 			Expect(isTexasContainerEqual(*a, *b)).To(BeTrue())
 
 			b.Image = b.Image + "-changed"
@@ -117,7 +117,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		It("returns SecurityEnabled=false when Pod is not created from Skiperator Application", func() {
 			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "ns"}}
 			cfg, err := getSecurityConfigForPod(ctx, nil, pod)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(*cfg).To(Equal(PodSecurityConfiguration{SecurityEnabled: false}))
 		})
 
@@ -127,7 +127,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 					Name:      "p",
 					Namespace: "ns",
 					Labels: map[string]string{
-						SkiperatorApplicationRefLabel: "skiperator-app",
+						SkiperatorApplicationRefLabel: skiperatorAppName,
 					},
 				},
 			}
@@ -137,7 +137,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns error when Pod is created from Skiperator Application but Skiperator Application does not exist", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "p",
@@ -159,7 +159,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns SecurityEnabled=false when referenced Skiperator Application has no security label", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "p",
@@ -192,7 +192,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns error when no SecurityConfig resource was found for a given pod created by a Skiperator Application", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "p",
@@ -229,7 +229,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns error when multiple SecurityConfigs was found all referencing the same Skiperator Application", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "p",
@@ -278,7 +278,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns full PodSecurityConfiguration when pod is created by Skiperator Application with correct label and when a SecurityConfig referencing the same app exists", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "p",
@@ -319,8 +319,8 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 			)
 
 			texasContainer, getTexasErr := getTexasContainer(securityConfig)
-			Expect(getTexasErr).To(BeNil())
-			Expect(err).To(BeNil())
+			Expect(getTexasErr).ToNot(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(*cfg).To(Equal(
 				PodSecurityConfiguration{
 					SecurityConfig:  &securityConfig,
@@ -351,7 +351,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 				*texasContainer,
 				*texasContainer,
 			)
-			Expect(result).To(Equal(true))
+			Expect(result).To(BeTrue())
 		})
 
 		It("returns false when two texas containers are not equal on the fields that are used", func() {
@@ -381,13 +381,13 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 				*texasContainer,
 				alteredTexasContainer,
 			)
-			Expect(result).To(Equal(false))
+			Expect(result).To(BeFalse())
 		})
 	})
 
 	Describe("validateTokenxCorrectlyConfigured", func() {
 		It("returns error when pod should have texas init container but it does not have texas init container", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "p",
@@ -413,7 +413,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 			}
 
 			texasContainer, getTexasErr := getTexasContainer(securityConfig)
-			Expect(getTexasErr).To(BeNil())
+			Expect(getTexasErr).ToNot(HaveOccurred())
 
 			podSecurityConfig := PodSecurityConfiguration{
 				SecurityConfig:  &securityConfig,
@@ -433,7 +433,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns error when TokenX is enabled, texas init container is injected but texas environment variable is missing from main app container", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			securityConfig := v1alpha.SecurityConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "security-config",
@@ -445,7 +445,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 				},
 			}
 			texasContainer, getTexasErr := getTexasContainer(securityConfig)
-			Expect(getTexasErr).To(BeNil())
+			Expect(getTexasErr).ToNot(HaveOccurred())
 
 			podSecurityConfig := PodSecurityConfiguration{
 				SecurityConfig:  &securityConfig,
@@ -483,7 +483,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 		})
 
 		It("returns no error when TokenX is enabled, correct Texas container is injected and texas env var is injected in main app container", func() {
-			skiperatorAppName := "skiperator-app"
+			skiperatorAppName := skiperatorAppName
 			securityConfig := v1alpha.SecurityConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "security-config",
@@ -495,7 +495,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 				},
 			}
 			texasContainer, getTexasErr := getTexasContainer(securityConfig)
-			Expect(getTexasErr).To(BeNil())
+			Expect(getTexasErr).ToNot(HaveOccurred())
 
 			podSecurityConfig := PodSecurityConfiguration{
 				SecurityConfig:  &securityConfig,
@@ -529,7 +529,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 			}
 
 			validateTokenxErr := validateTokenxCorrectlyConfigured(pod, &podSecurityConfig)
-			Expect(validateTokenxErr).To(BeNil())
+			Expect(validateTokenxErr).ToNot(HaveOccurred())
 		})
 	})
 })

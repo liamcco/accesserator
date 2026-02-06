@@ -77,7 +77,11 @@ func fetchURLBytes(u string) []byte {
 	if err != nil {
 		fatalf("GET %s: %v", u, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "close response body for %s: %v\n", u, cerr)
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		fatalf("GET %s: unexpected status %s", u, resp.Status)

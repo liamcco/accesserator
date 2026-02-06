@@ -42,6 +42,8 @@ var (
 	testEnv   *envtest.Environment
 )
 
+const skiperatorAppName = "skiperator-app"
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -194,7 +196,7 @@ func getPod(objectKey client.ObjectKey, containerName string) *corev1.Pod {
 var _ = Describe("Pod mutating and validating webhook", func() {
 	It("injects a texas sidecar as an init container when pod is created from security enabled skiperator app and securityconfig enables tokenx", func() {
 		ns := getWebhookEnabledNamespace("pod-webhook-create-ns")
-		skiperatorAppName := "skiperator-app"
+		skiperatorAppName := skiperatorAppName
 		securityConfigName := "security-config"
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
@@ -247,7 +249,7 @@ var _ = Describe("Pod mutating and validating webhook", func() {
 		ns := getWebhookEnabledNamespace("pod-webhook-update-ns")
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
-		skiperatorAppName := "skiperator-app"
+		skiperatorAppName := skiperatorAppName
 		// Create Pod without Skiperator reference
 		pod := getPod(
 			client.ObjectKey{
