@@ -379,7 +379,7 @@ $(HELM): $(LOCALBIN)
 	url="https://get.helm.sh/helm-$(HELM_VERSION)-$${os}-$${arch}.tar.gz"; \
 	echo "Downloading helm $(HELM_VERSION) from $$url"; \
 	curl -L -o helm.tar.gz "$$url"; \
-	tar -xzf helm.tar.gz -C "$(LOCALBIN)" --strip-components=1 --no-same-owner "*/helm"; \
+	tar -xzf helm.tar.gz -C "$(LOCALBIN)" --strip-components=1 --no-same-owner --wildcards "*/helm"; \
 	chmod +x "$(HELM)"; \
 	rm helm.tar.gz; \
 	echo "✅ helm installed at $(HELM)"
