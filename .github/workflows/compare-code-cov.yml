@@ -1,0 +1,49 @@
+name: Ever increasing code coverage
+
+on:
+  pull_request:
+
+jobs:
+  compare-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Compute PR coverage
+        id: pr_cov
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR_COV=$( (go test ./... -coverprofile=coverage.out >/dev/null 2>/dev/null && go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/{gsub("%","",$3); print $3/100}') | tail -n1 )
+          echo "pr_cov=$PR_COV" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Compute main coverage
+        id: main_cov
+        shell: bash
+        working-directory: main
+        run: |
+          set -euo pipefail
+          MAIN_COV=$( (go test ./... -coverprofile=coverage.out >/dev/null 2>/dev/null && go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/{gsub("%","",$3); print $3/100}') | tail -n1 )
+          echo "main_cov=$MAIN_COV" >> "$GITHUB_OUTPUT"
+
+      - name: Compare coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR_COV="${{ steps.pr_cov.outputs.pr_cov }}"
+          MAIN_COV="${{ steps.main_cov.outputs.main_cov }}"
+          echo "PR coverage: $PR_COV"
+          echo "Main coverage: $MAIN_COV"
+          awk -v pr="$PR_COV" -v main="$MAIN_COV" 'BEGIN { if (pr > main) exit 0; exit 1 }'
