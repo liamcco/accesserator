@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/kartverket/accesserator/api/v1alpha"
 	"github.com/kartverket/accesserator/pkg/config"
@@ -31,6 +32,7 @@ const (
 	OpaInitContainerName = "opa"
 	OpaPortName          = "http"
 	OpaTmpVolumeName     = "opa-tmp"
+	OpaConfigMountPath   = "/config"
 
 	MaskinportenEnabledEnvVarName = "MASKINPORTEN_ENABLED"
 	AzureEnabledEnvVarName        = "AZURE_ENABLED"
@@ -262,7 +264,7 @@ func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
 					Name: expectedOpaConfigName,
 				},
 				Items: []corev1.KeyToPath{
-					{Key: "config.yaml", Path: "config.yaml"},
+					{Key: utilities.OpaConfigFileName, Path: utilities.OpaConfigFileName},
 				},
 			},
 		},
@@ -270,6 +272,10 @@ func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
 }
 
 func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
+	if securityConfig.Spec.Opa == nil || !securityConfig.Spec.Opa.Enabled {
+		return corev1.Container{}
+	}
+
 	opaImageUrl := fmt.Sprintf(
 		"%s:%s",
 		config.Get().OpaImageName,
@@ -277,6 +283,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 	)
 
 	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
+	opaConfigFilePath := OpaConfigMountPath + "/" + utilities.OpaConfigFileName
 
 	return corev1.Container{
 		Name:  OpaInitContainerName,
@@ -284,8 +291,8 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 		Args: []string{
 			"run",
 			"--server",
-			"--config-file=/config/config.yaml",
-			"--addr=0.0.0.0:8181", // TODO: Use OpaPort parameter
+			"--config-file=" + opaConfigFilePath,
+			"--addr=0.0.0.0:" + strconv.FormatInt(int64(config.Get().OpaPort), 10),
 		},
 		Ports: []corev1.ContainerPort{
 			{Name: OpaPortName, ContainerPort: config.Get().OpaPort, Protocol: corev1.ProtocolTCP},
@@ -315,7 +322,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      expectedOpaConfigName,
-				MountPath: "/config",
+				MountPath: OpaConfigMountPath,
 				ReadOnly:  true,
 			},
 			{
@@ -325,21 +332,15 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 		},
 		Env: []corev1.EnvVar{
 			{
-				Name: "GITHUB_TOKEN",
+				Name: utilities.OpaGithubTokenEnvVar,
 				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "opa-github-secret"},
-						Key:                  "github_token",
-					},
+					SecretKeyRef: &securityConfig.Spec.Opa.GithubToken,
 				},
 			},
 			{
-				Name: "OPA_PUBLIC_KEY",
+				Name: utilities.OpaPublicKeyEnvVar,
 				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "opa-sign-secret"},
-						Key:                  "public_sign_key",
-					},
+					ConfigMapKeyRef: &securityConfig.Spec.Opa.BundlePublicKey,
 				},
 			},
 		},

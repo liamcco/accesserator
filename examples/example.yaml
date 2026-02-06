@@ -91,6 +91,14 @@ spec:
     enabled: true
   opa:
     enabled: true
+    githubToken:
+      name: "opa-github-secret"
+      key: "github_token"
+    bundlePublicKey:
+      name: "opa-sign-config"
+      key: "public_sign_key"
+    bundlePath: "ghcr.io/kartverket/opa-bundle"
+    bundleVersion: "latest"
   applicationRef: app
 ---
 apiVersion: accesserator.kartverket.no/v1alpha
@@ -103,6 +111,14 @@ spec:
     enabled: true
   opa:
     enabled: true
+    githubToken:
+      name: "opa-github-secret"
+      key: "github_token"
+    bundlePublicKey:
+      name: "opa-sign-config"
+      key: "public_sign_key"
+    bundlePath: "ghcr.io/kartverket/opa-bundle"
+    bundleVersion: "latest"
   applicationRef: another-app
 ---
 apiVersion: ztoperator.kartverket.no/v1alpha1
