@@ -1,0 +1,13 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Configuration
+metadata:
+  name: configuration
+spec:
+  parallel: 40
+  timeouts:
+    delete: 60s
+    assert: 10s
+    apply: 10s
+    cleanup: 60s
+    error: 10s
+    exec: 10s

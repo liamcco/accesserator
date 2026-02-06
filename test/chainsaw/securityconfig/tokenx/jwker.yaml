@@ -1,0 +1,12 @@
+apiVersion: nais.io/v1
+kind: Jwker
+metadata:
+  name: app
+spec:
+  accessPolicy:
+    inbound:
+      rules: []
+  secretName: app-jwker-secret
+status:
+  synchronizationSecretName: app-jwker-secret
+  synchronizationState: RolloutComplete

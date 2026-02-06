@@ -1,0 +1,54 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: token-x-disabled
+spec:
+  skip: false
+  concurrent: true
+  skipDelete: false
+  namespaceTemplate:
+    metadata:
+      name: chainsaw-token-x-disabled
+      labels:
+        accesserator-webhooks: enabled
+  steps:
+    - try:
+        - create:
+            file: ../../common/skiperator-app.yaml
+        - create:
+            file: securityconfig.yaml
+        - error:
+            file: jwker.yaml
+        - patch:
+            resource:
+              apiVersion: accesserator.kartverket.no/v1alpha
+              kind: SecurityConfig
+              metadata:
+                name: security-config
+              spec:
+                tokenx:
+                  enabled: true
+        - assert:
+            file: jwker.yaml
+        - script:
+            content: |
+              kubectl wait pod --for=create --timeout=10s -n chainsaw-token-x-disabled -l app=app
+              kubectl wait pod --for=condition=Ready --timeout=10s -n chainsaw-token-x-disabled -l app=app
+        - script:
+            content: |
+              kubectl exec -n chainsaw-token-x-disabled -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 1 || echo "TEXAS_URL is NOT set" && exit 0'
+        - patch:
+            resource:
+              apiVersion: skiperator.kartverket.no/v1alpha1
+              kind: Application
+              metadata:
+                name: app
+                labels:
+                  skiperator/security: "enabled"
+        - script:
+            content: |
+              kubectl rollout restart -n chainsaw-token-x-disabled deployment/app
+              kubectl rollout status -n chainsaw-token-x-disabled deployment/app
+        - script:
+            content: |
+              kubectl exec -n chainsaw-token-x-disabled -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 0 || echo "TEXAS_URL is NOT set" && exit 1'
