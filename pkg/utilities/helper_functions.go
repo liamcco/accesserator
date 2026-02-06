@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func Ptr[T any](v T) *T {
@@ -43,4 +46,11 @@ func GetJwkerSecretName(jwkerName string) string {
 
 func GetTokenxEgressName(securityConfigName string, tokenxConfigName string) string {
 	return fmt.Sprintf("%s-%s-%s", securityConfigName, tokenxConfigName, EgressNameSuffix)
+}
+
+func GetMockKubernetesClient(scheme *runtime.Scheme, objects ...client.Object) client.Client {
+	return fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objects...).
+		Build()
 }
