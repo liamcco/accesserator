@@ -23,21 +23,9 @@ spec:
             - -metrics-bind-address=0.0.0.0:8181
             - -metrics-secure=false
             - -webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
-          env:
-            - name: ACCESSERATOR_CLUSTER_NAME
-              value: kind-accesserator
-            - name: ACCESSERATOR_TOKENX_NAME
-              value: tokendings
-            - name: ACCESSERATOR_TOKENX_NAMESPACE
-              value: jwker-system
-            - name: ACCESSERATOR_TEXAS_IMAGE_NAME
-              value: ghcr.io/nais/texas
-            - name: ACCESSERATOR_TEXAS_IMAGE_TAG
-              value: 2025-12-12-090328-adc830c
-            - name: ACCESSERATOR_TEXAS_PORT
-              value: "3000"
-            - name: ACCESSERATOR_TEXAS_URL_ENV_VAR_NAME
-              value: TEXAS_URL
+          envFrom:
+            - secretRef:
+                name: accesserator-env
           image: accesserator:latest
           imagePullPolicy: Never
           livenessProbe:
