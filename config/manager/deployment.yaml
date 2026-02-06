@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: accesserator
+  name: accesserator
+  namespace: accesserator-system
+spec:
+  replicas: 2
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: accesserator
+  template:
+    metadata:
+      labels:
+        app: accesserator
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - args:
+            - -leader-elect
+            - -metrics-bind-address=0.0.0.0:8181
+            - -metrics-secure=false
+            - -webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+          env:
+            - name: ACCESSERATOR_CLUSTER_NAME
+              value: kind-accesserator
+            - name: ACCESSERATOR_TOKENX_NAME
+              value: tokendings
+            - name: ACCESSERATOR_TOKENX_NAMESPACE
+              value: jwker-system
+            - name: ACCESSERATOR_TEXAS_IMAGE_NAME
+              value: ghcr.io/nais/texas
+            - name: ACCESSERATOR_TEXAS_IMAGE_TAG
+              value: 2025-12-12-090328-adc830c
+            - name: ACCESSERATOR_TEXAS_PORT
+              value: "3000"
+            - name: ACCESSERATOR_TEXAS_URL_ENV_VAR_NAME
+              value: TEXAS_URL
+          image: accesserator:latest
+          imagePullPolicy: Never
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+          name: accesserator
+          ports:
+            - containerPort: 8181
+              name: metrics
+            - containerPort: 8081
+              name: probes
+            - containerPort: 9443
+              name: webhook-server
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - NET_BIND_SERVICE
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 65532
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /tmp/k8s-webhook-server/serving-certs
+              name: webhook-certs
+              readOnly: true
+      imagePullSecrets:
+        - name: github-auth
+      priorityClassName: skip-critical
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: accesserator
+      volumes:
+        - name: webhook-certs
+          secret:
+            defaultMode: 420
+            secretName: webhook-server-cert
