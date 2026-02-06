@@ -29,7 +29,8 @@ type TokenXConfig struct {
 }
 
 type OpaConfig struct {
-	Enabled bool
+	Enabled   bool
+	BundleUrl string
 }
 
 type Descendant[T client.Object] struct {
