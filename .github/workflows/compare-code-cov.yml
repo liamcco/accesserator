@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PR_COV=$( (go test ./... -coverprofile=coverage.out >/dev/null 2>/dev/null && go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/{gsub("%","",$3); print $3/100}') | tail -n1 )
+          PR_COV=$(go test ./... -coverprofile=coverage.out >/dev/null 2>/dev/null && go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/{gsub("%","",$3); print $3/100}' | tail -n1)
           echo "pr_cov=$PR_COV" >> "$GITHUB_OUTPUT"
 
       - name: Checkout main
@@ -35,7 +35,7 @@ jobs:
         working-directory: main
         run: |
           set -euo pipefail
-          MAIN_COV=$( (go test ./... -coverprofile=coverage.out >/dev/null 2>/dev/null && go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/{gsub("%","",$3); print $3/100}') | tail -n1 )
+          MAIN_COV=$(go test ./... -coverprofile=coverage.out >/dev/null 2>/dev/null && go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/{gsub("%","",$3); print $3/100}' | tail -n1)
           echo "main_cov=$MAIN_COV" >> "$GITHUB_OUTPUT"
 
       - name: Compare coverage
