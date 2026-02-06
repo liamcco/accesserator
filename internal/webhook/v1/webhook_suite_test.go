@@ -1,19 +1,3 @@
-/*
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1
 
 import (
@@ -26,10 +10,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kartverket/accesserator/api/v1alpha"
+	"github.com/kartverket/accesserator/pkg/config"
+	"github.com/kartverket/skiperator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
-	v1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -65,15 +54,26 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
-	err = v1.AddToScheme(scheme.Scheme)
+	err = corev1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = v1alpha.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = v1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Load the app config
+	err = config.Load()
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: false,
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "..", "hack", "crd", "bases"),
+		},
+		ErrorIfCRDPathMissing: true,
 
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
 			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook")},
@@ -161,3 +161,135 @@ func getFirstFoundEnvTestBinaryDir() string {
 	}
 	return ""
 }
+
+// These are integration-style tests that exercise webhook wiring through the apiserver.
+// We split them into mutating vs validating invocation to make intent and failures clearer.
+
+func getWebhookEnabledNamespace(name string) *corev1.Namespace {
+	return &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"accesserator-webhooks": "enabled",
+			},
+		},
+	}
+}
+
+func getPod(objectKey client.ObjectKey, containerName string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      objectKey.Name,
+			Namespace: objectKey.Namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:  containerName,
+				Image: "nginx:stable",
+			}},
+		},
+	}
+}
+
+var _ = Describe("Pod mutating and validating webhook", func() {
+	It("injects a texas sidecar as an init container when pod is created from security enabled skiperator app and securityconfig enables tokenx", func() {
+		ns := getWebhookEnabledNamespace("pod-webhook-create-ns")
+		skiperatorAppName := "skiperator-app"
+		securityConfigName := "security-config"
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
+
+		skiperatorApp := v1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      skiperatorAppName,
+				Namespace: ns.GetName(),
+				Labels: map[string]string{
+					SecurityEnabledLabelName: SecurityEnabledLabelValue,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, &skiperatorApp)).To(Succeed())
+		securityConfig := v1alpha.SecurityConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      securityConfigName,
+				Namespace: ns.GetName(),
+			},
+			Spec: v1alpha.SecurityConfigSpec{
+				Tokenx:         &v1alpha.TokenXSpec{Enabled: true},
+				ApplicationRef: skiperatorAppName,
+			},
+		}
+		Expect(k8sClient.Create(ctx, &securityConfig)).To(Succeed())
+
+		pod := getPod(
+			client.ObjectKey{
+				Name:      "pod-webhook-create",
+				Namespace: ns.Name,
+			},
+			skiperatorAppName,
+		)
+		if pod.Labels == nil {
+			pod.Labels = make(map[string]string)
+		}
+
+		pod.Labels[SkiperatorApplicationRefLabel] = skiperatorAppName
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+
+		mutatedPod := &corev1.Pod{}
+		getErr := k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, mutatedPod)
+		Expect(getErr).NotTo(HaveOccurred())
+
+		Expect(mutatedPod.Spec.InitContainers).NotTo(BeNil())
+		Expect(mutatedPod.Spec.InitContainers).To(ContainElement(HaveField("Name", Equal(TexasInitContainerName))))
+	})
+
+	It("does not inject a texas sidecar as an init container when pod is updated", func() {
+		ns := getWebhookEnabledNamespace("pod-webhook-update-ns")
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
+		skiperatorAppName := "skiperator-app"
+		// Create Pod without Skiperator reference
+		pod := getPod(
+			client.ObjectKey{
+				Name:      "pod-webhook-update",
+				Namespace: ns.Name,
+			},
+			skiperatorAppName,
+		)
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+
+		// Update Pod with Skiperator reference. This should NOT invoke injection of texas sidecar
+		updatedPod := &corev1.Pod{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)).To(Succeed())
+		if updatedPod.Labels == nil {
+			updatedPod.Labels = make(map[string]string)
+		}
+		updatedPod.Labels[SkiperatorApplicationRefLabel] = skiperatorAppName
+		Expect(k8sClient.Update(ctx, updatedPod)).To(Succeed())
+
+		// Ensure no new init containers are injected on update
+		Expect(updatedPod.Spec.InitContainers).To(BeNil())
+	})
+
+	It("does not inject a texas sidecar as an init container when pod is deleted", func() {
+		ns := getWebhookEnabledNamespace("pod-webhook-delete-ns")
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
+		pod := getPod(
+			client.ObjectKey{
+				Name:      "pod-webhook-delete",
+				Namespace: ns.Name,
+			},
+			"c",
+		)
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+
+		// Delete the pod
+		Expect(k8sClient.Delete(ctx, pod)).To(Succeed())
+
+		// Try to get the pod, should not exist
+		deletedPod := &corev1.Pod{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, deletedPod)
+		Expect(err).To(HaveOccurred())
+	})
+})
