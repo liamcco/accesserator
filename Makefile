@@ -253,7 +253,7 @@ cert-manager: kustomize kubectl ## Install cert-manager to the cluster
 	@echo -e "🤞  Installing cert-manager..."
 	"$(KUBECTL)" apply -f https://github.com/cert-manager/cert-manager/releases/download/v$(CERT_MANAGER_VERSION)/cert-manager.yaml
 	@echo "🕑  Waiting for cert-manager to be ready..."
-	"$(KUBECTL)"n cert-manager wait deploy --all --for=condition=Available --timeout=60s
+	"$(KUBECTL)" -n cert-manager wait deploy --all --for=condition=Available --timeout=60s
 	@echo -e "✅  Cert-manager installed!"
 	@out="$$( "$(KUSTOMIZE)" build config/cert-manager 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -; else echo "No cert manager resources to install; skipping."; fi
