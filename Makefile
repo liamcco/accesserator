@@ -157,6 +157,7 @@ endif
 deploy: ensurelocal isnotrunning accesserator-namespace generate install kustomize docker-build ## Deploy accesserator and all the required resources for accesserator to run properly to the kind cluster
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
 	"$(KIND)" load docker-image ${IMG} --name $(KIND_CLUSTER_NAME)
+	"$(KUBECTL)" create secret generic accesserator-env --from-env-file=.env -n accesserator-system --context $(KUBECONTEXT)
 	"$(KUSTOMIZE)" build config/webhook | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -
 	"$(KUSTOMIZE)" build config/manager | "$(KUBECTL)" apply --context $(KUBECONTEXT) -f -
 
