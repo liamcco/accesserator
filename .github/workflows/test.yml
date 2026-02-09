@@ -25,6 +25,7 @@ jobs:
           make test
 
       - name: Compute PR coverage
+        if: github.event_name == 'pull_request'
         id: pr_cov
         shell: bash
         run: |
@@ -46,17 +47,20 @@ jobs:
 
       - name: Checkout main
         uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
         with:
           ref: main
           path: main
 
       - name: Running Tests (main)
         working-directory: main
+        if: github.event_name == 'pull_request'
         run: |
           go mod tidy
           make test
 
       - name: Compute main coverage
+        if: github.event_name == 'pull_request'
         id: main_cov
         shell: bash
         working-directory: main
@@ -78,6 +82,7 @@ jobs:
           echo "main_cov=$MAIN_COV" >> "$GITHUB_OUTPUT"
 
       - name: Compare coverage
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
