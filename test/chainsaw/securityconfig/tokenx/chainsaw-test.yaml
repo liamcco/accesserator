@@ -32,8 +32,9 @@ spec:
             file: jwker.yaml
         - script:
             content: |
-              kubectl wait pod --for=create --timeout=10s -n chainsaw-token-x-disabled -l app=app
-              kubectl wait pod --for=condition=Ready --timeout=10s -n chainsaw-token-x-disabled -l app=app
+              until kubectl get deployment app -n chainsaw-token-x-disabled 2>/dev/null; do sleep 1; done
+              kubectl rollout status deployment/app -n chainsaw-token-x-disabled --timeout=10s
+              kubectl wait --for=condition=Ready pod -l app=app -n chainsaw-token-x-disabled --timeout=10s
         - script:
             content: |
               kubectl exec -n chainsaw-token-x-disabled -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 1 || echo "TEXAS_URL is NOT set" && exit 0'
