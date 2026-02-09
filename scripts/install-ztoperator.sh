@@ -2,6 +2,7 @@
 
 KUBECONTEXT=${KUBECONTEXT:-"kind-accesserator"}
 ZTOPERATOR_VERSION=${ZTOPERATOR_VERSION:-"latest"}
+KUBECTL_BIN="${KUBECTL_BIN:-./bin/kubectl}"
 
 ZTOPERATOR_RESOURCES=(
   https://raw.githubusercontent.com/kartverket/ztoperator/refs/heads/main/config/crd/bases/ztoperator.kartverket.no_authpolicies.yaml
@@ -11,7 +12,7 @@ ZTOPERATOR_RESOURCES=(
 echo "🤞  Creating namespace: $namespace_name"
 
 # Attempt to create the namespace and capture both stdout and stderr
-output=$(kubectl create namespace "ztoperator-system" 2>&1)
+output=$("${KUBECTL_BIN}" create namespace "ztoperator-system" 2>&1)
 exit_code=$?
 
 # Check the exit code and output
@@ -26,7 +27,7 @@ fi
 
 # Install required ztoperator resources
 for resource in "${ZTOPERATOR_RESOURCES[@]}"; do
-  kubectl apply --context "$KUBECONTEXT" -f "$resource"
+  "${KUBECTL_BIN}" apply --context "$KUBECONTEXT" -f "$resource"
 done
 
 # Install ztoperator
@@ -224,4 +225,4 @@ spec:
 EOF
 )"
 
-kubectl apply -f <(echo "$ZTOPERATOR_MANIFESTS") --context "$KUBECONTEXT"
+"${KUBECTL_BIN}" apply -f <(echo "$ZTOPERATOR_MANIFESTS") --context "$KUBECONTEXT"

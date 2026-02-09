@@ -1,15 +1,17 @@
 name: Tests
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   test:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
     steps:
-      - name: Clone the code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Go
@@ -20,5 +22,67 @@ jobs:
       - name: Running Tests
         run: |
           go mod tidy
-          make setup-envtest
           make test
+
+      - name: Compute PR coverage
+        id: pr_cov
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s cover.out ]; then
+            echo "cover.out is missing or empty (PR)";
+            ls -l cover.out || true;
+            exit 1;
+          fi
+          go tool cover -func=cover.out > cover.func
+          echo "cover.func tail (PR):"
+          tail -n5 cover.func || true
+          PR_COV=$(awk '/^total:/{gsub("%","",$3); print $3/100}' cover.func | tail -n1)
+          if [ -z "$PR_COV" ]; then
+            echo "PR_COV is empty";
+            exit 1;
+          fi
+          echo "pr_cov=$PR_COV" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Running Tests (main)
+        working-directory: main
+        run: |
+          go mod tidy
+          make test
+
+      - name: Compute main coverage
+        id: main_cov
+        shell: bash
+        working-directory: main
+        run: |
+          set -euo pipefail
+          if [ ! -s cover.out ]; then
+            echo "cover.out is missing or empty (main)";
+            ls -l cover.out || true;
+            exit 1;
+          fi
+          go tool cover -func=cover.out > cover.func
+          echo "cover.func tail (main):"
+          tail -n5 cover.func || true
+          MAIN_COV=$(awk '/^total:/{gsub("%","",$3); print $3/100}' cover.func | tail -n1)
+          if [ -z "$MAIN_COV" ]; then
+            echo "MAIN_COV is empty";
+            exit 1;
+          fi
+          echo "main_cov=$MAIN_COV" >> "$GITHUB_OUTPUT"
+
+      - name: Compare coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR_COV="${{ steps.pr_cov.outputs.pr_cov }}"
+          MAIN_COV="${{ steps.main_cov.outputs.main_cov }}"
+          echo "PR coverage: $PR_COV"
+          echo "Main coverage: $MAIN_COV"
+          awk -v pr="$PR_COV" -v main="$MAIN_COV" 'BEGIN { if (pr > main) exit 0; exit 1 }'

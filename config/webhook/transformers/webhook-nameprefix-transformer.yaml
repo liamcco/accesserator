@@ -1,0 +1,10 @@
+apiVersion: builtin
+kind: PrefixTransformer
+metadata:
+  name: webhook-config-prefix
+prefix: accesserator-
+fieldSpecs:
+  - path: metadata/name
+    kind: MutatingWebhookConfiguration
+  - path: metadata/name
+    kind: ValidatingWebhookConfiguration

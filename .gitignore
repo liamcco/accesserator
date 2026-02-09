@@ -36,9 +36,6 @@ go.work.sum
 cover.out
 
 # env file
-.env*
-
-# env file
 bin/
 .idea/
 istio-*

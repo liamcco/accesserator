@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: accesserator
+  name: accesserator
+  namespace: accesserator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: accesserator
+subjects:
+  - kind: ServiceAccount
+    name: accesserator
+    namespace: accesserator-system

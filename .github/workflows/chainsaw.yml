@@ -1,0 +1,28 @@
+name: Run Chainsaw Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Kind cluster and deploy accesserator
+        run: |
+          make local deploy
+
+      - name: Run Chainsaw tests
+        run: |
+          make chainsaw-test-remote

@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    app: accesserator
+  name: accesserator
+  namespace: accesserator-system
+spec:
+  minAvailable: 50%
+  selector:
+    matchLabels:
+      app: accesserator

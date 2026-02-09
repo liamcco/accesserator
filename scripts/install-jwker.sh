@@ -2,6 +2,7 @@
 set -eo pipefail
 
 KUBECONTEXT=${KUBECONTEXT:-"kind-accesserator"}
+KUBECTL_BIN="${KUBECTL_BIN:-./bin/kubectl}"
 
 echo "🤞  Creating namespace: obo"
 
@@ -9,7 +10,7 @@ echo "🤞  Creating namespace: obo"
 # NOTE: `set -e` would abort the script on a non-zero exit code here (e.g. AlreadyExists),
 # so we temporarily disable it to handle the error explicitly.
 set +e
-output=$(kubectl create namespace "obo" --context "$KUBECONTEXT" 2>&1)
+output=$("${KUBECTL_BIN}" create namespace "obo" --context "$KUBECONTEXT" 2>&1)
 exit_code=$?
 set -e
 
@@ -97,4 +98,4 @@ subjects:
 EOF
 )"
 
-kubectl apply -f <(echo "$JWKER_MANIFESTS") --context "$KUBECONTEXT"
+"${KUBECTL_BIN}" apply -f <(echo "$JWKER_MANIFESTS") --context "$KUBECONTEXT"
