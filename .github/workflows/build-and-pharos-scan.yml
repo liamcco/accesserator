@@ -34,10 +34,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Use sha for tags tags
+            # Always tag with the git SHA
             type=sha,format=long
-            # set latest tag for default branch
-            type=raw,value=latest,enable={{is_default_branch}}
+            # Also tag as :main only for pushes to the main branch
+            type=raw,value=main,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
       - name: Build and push Docker image
         id: build-docker
