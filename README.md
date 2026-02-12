@@ -143,9 +143,13 @@ metadata:
 spec:
   opa:
     enabled: true
-    githubCredentials:
-      clientTokenKey: "Referanse til GitHub token"
-      clientTokenRef: "Ønsket navn til GitHub token"
-
+    githubToken:
+      name: "opa-github-secret"
+      key: "github_token"
+    bundlePublicKey:
+      name: "opa-sign-config"
+      key: "public_sign_key"
+    bundlePath: "ghcr.io/kartverket/opa-bundle"
+    bundleVersion: "latest"
   applicationRef: app
 ```
