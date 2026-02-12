@@ -514,7 +514,7 @@ func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *Po
 }
 
 func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSecurityConfiguration) error {
-	// Validate that the Texas init container exists
+	// Validate that the Opa init container exists
 	hasOpaInitContainer := false
 	for _, initContainer := range pod.Spec.InitContainers {
 		if initContainer.Name == OpaInitContainerName {
@@ -547,8 +547,14 @@ func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSe
 		}
 	}
 	if !hasOpaUrlEnvVar {
-		podlog.Info("Opa is enabled but OPA_URL env var is missing", "container", securityConfigForPod.AppName)
-		return fmt.Errorf("Opa is enabled but container '%s' is missing environment variable '%s'", securityConfigForPod.AppName, config.Get().OpaUrlEnvVarName)
+		errMsg := fmt.Sprintf(
+			"Opa is enabled but %s env var is missing for pod from skiperator app with name %s/%s",
+			pod.Namespace,
+			securityConfigForPod.AppName,
+			config.Get().OpaUrlEnvVarName,
+		)
+		podlog.Info(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	return nil
 }
