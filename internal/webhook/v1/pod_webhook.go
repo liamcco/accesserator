@@ -208,10 +208,7 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 		return nil, fmt.Errorf("%s", msg)
 	}
 
-	texasContainer, err := getTexasContainer(*securityConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct Texas container: %w", err)
-	}
+	texasContainer := getTexasContainer(*securityConfig)
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
@@ -221,9 +218,9 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	}, nil
 }
 
-func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
+func getTexasContainer(securityConfig v1alpha.SecurityConfig) *corev1.Container {
 	if securityConfig.Spec.Tokenx == nil || !securityConfig.Spec.Tokenx.Enabled {
-		return nil, fmt.Errorf("a texas container should not be created if tokenx is not enabled")
+		return &corev1.Container{}
 	}
 
 	texasImageUrl := fmt.Sprintf(
@@ -285,7 +282,7 @@ func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container
 			},
 		},
 		EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: expectedJwkerSecretName}}}},
-	}, nil
+	}
 }
 
 func validatePod(ctx context.Context, crudClient client.Client, obj runtime.Object) (admission.Warnings, error) {
