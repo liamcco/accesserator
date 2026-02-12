@@ -240,23 +240,34 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct Texas container: %w", err)
 	}
-	opaContainer := getOpaContainer(*securityConfig)
-	opaConfigVolume := getOpaConfigVolume(*securityConfig)
+
+	opaContainer, err := getOpaContainer(*securityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Opa container: %w", err)
+	}
+
+	opaConfigVolume, err := getOpaConfigVolume(*securityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Opa config volume: %w", err)
+	}
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
 		AppName:         appName,
 		SecurityEnabled: true,
 		TexasContainer:  *texasContainer,
-		OpaContainer:    opaContainer,
-		OpaConfigVolume: opaConfigVolume,
+		OpaContainer:    *opaContainer,
+		OpaConfigVolume: *opaConfigVolume,
 	}, nil
 }
 
-func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
-	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
+func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) (*corev1.Volume, error) {
+	if securityConfig.Spec.Opa == nil || !securityConfig.Spec.Opa.Enabled {
+		return &corev1.Volume{}, nil
+	}
 
-	return corev1.Volume{
+	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
+	return &corev1.Volume{
 		Name: expectedOpaConfigName,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -268,12 +279,12 @@ func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
-func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
+func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
 	if securityConfig.Spec.Opa == nil || !securityConfig.Spec.Opa.Enabled {
-		return corev1.Container{}
+		return &corev1.Container{}, nil
 	}
 
 	opaImageUrl := fmt.Sprintf(
@@ -285,7 +296,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
 	opaConfigFilePath := OpaConfigMountPath + "/" + utilities.OpaConfigFileName
 
-	return corev1.Container{
+	return &corev1.Container{
 		Name:  OpaInitContainerName,
 		Image: opaImageUrl,
 		Args: []string{
@@ -348,7 +359,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 				Value: "true",
 			},
 		},
-	}
+	}, nil
 }
 
 func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
