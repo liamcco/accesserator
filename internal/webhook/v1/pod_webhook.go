@@ -38,6 +38,7 @@ const (
 	AzureEnabledEnvVarName        = "AZURE_ENABLED"
 	IdportenEnabledEnvVarName     = "IDPORTEN_ENABLED"
 	TokenXEnabledEnvVarName       = "TOKEN_X_ENABLED"
+	OpaEnabledEnvVarName          = "OPA_ENABLED"
 )
 
 // nolint:unused
@@ -341,6 +342,10 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 				ValueFrom: &corev1.EnvVarSource{
 					ConfigMapKeyRef: &securityConfig.Spec.Opa.BundlePublicKey,
 				},
+			},
+			{
+				Name:  OpaEnabledEnvVarName,
+				Value: "true",
 			},
 		},
 	}
