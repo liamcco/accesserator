@@ -75,6 +75,10 @@ func (q QuotedString) MarshalYAML() (interface{}, error) {
 }
 
 func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
+	if !scope.OpaConfig.Enabled {
+		return nil
+	}
+
 	githubTokenVar := QuotedString("${" + utilities.OpaGithubTokenEnvVar + "}")
 	publicKeyVar := QuotedString("${" + utilities.OpaPublicKeyEnvVar + "}")
 
