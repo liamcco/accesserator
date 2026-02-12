@@ -34,7 +34,7 @@ spec:
 
 Refer to [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on how to run and test Accesserator locally.
 
-## Autorisasjon med OPA (open policy agent)
+# Autorisasjon med OPA (open policy agent)
 
 Ved å bruke OPA vil applikasjonen din få en sidecontainer som inneholder en OPA policy-motor. Denne kan kalles på når applikasjonen trenger en autorisasjonsbeslutning. Løsningen gir sentralisert kontroll over autorisasjon og gjør det enklere å auditere, endre og rulle ut nye regler uten å måtte redeploye applikasjonene.
 
