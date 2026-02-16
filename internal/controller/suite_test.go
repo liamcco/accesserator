@@ -62,9 +62,9 @@ var _ = BeforeSuite(func() {
 	// Load environment variables
 	err = os.Setenv("ACCESSERATOR_CLUSTER_NAME", "test-cluster")
 	Expect(err).NotTo(HaveOccurred())
-	err = os.Setenv("ACCESSERATOR_TOKENX_NAME", "test-name")
-	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("ACCESSERATOR_TOKENX_NAMESPACE", "test-namespace")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ACCESSERATOR_TEXAS_IMAGE_TAG", "a-random-tag")
 	Expect(err).NotTo(HaveOccurred())
 	err = config.Load()
 	Expect(err).NotTo(HaveOccurred())
