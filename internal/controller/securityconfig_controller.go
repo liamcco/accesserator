@@ -44,6 +44,7 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&accesseratorv1alpha.SecurityConfig{}).
 		Owns(&naisiov1.Jwker{}).
+		Owns(&networkv1.NetworkPolicy{}).
 		Watches(&v1alpha1.Application{}, eventhandler.HandleSkiperatorApplicationEvent(r.Client)).
 		Named("securityconfig").
 		Complete(r)
