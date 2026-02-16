@@ -106,7 +106,7 @@ chainsaw-test-host: chainsaw install ensurelocal ensureaccesseratornotdeployed i
 
 .PHONY: chainsaw-test-host-single
 chainsaw-test-host-single: chainsaw install ensurelocal ensureaccesseratornotdeployed isrunning ## Run a specific chainsaw test against local kind cluster with accesserator running on host. Example usage: chainsaw-test-host-single dir=<CHAINSAW_TEST_DIR>
-	"$(CHAINSAW)" test --kube-context $(KUBECONTEXT) --config test/chainsaw/config.yaml --test-dir test/chainsaw/securityconfig/$(dir) && \
+	"$(CHAINSAW)" test --kube-context $(KUBECONTEXT) --config test/chainsaw/config.yaml --test-dir $(dir) && \
     	echo "✅ Test succeeded" || (echo "❌ Test failed" && exit 1)
 
 .PHONY: lint
