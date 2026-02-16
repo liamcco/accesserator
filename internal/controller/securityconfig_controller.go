@@ -26,7 +26,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -42,7 +44,10 @@ type SecurityConfigReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&accesseratorv1alpha.SecurityConfig{}).
+		For(
+			&accesseratorv1alpha.SecurityConfig{},
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		).
 		Owns(&naisiov1.Jwker{}).
 		Owns(&networkv1.NetworkPolicy{}).
 		Watches(&v1alpha1.Application{}, eventhandler.HandleSkiperatorApplicationEvent(r.Client)).
