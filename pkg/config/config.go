@@ -1,15 +1,18 @@
 package config
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/kelseyhightower/envconfig"
 )
 
 type Config struct {
 	ClusterName        string `split_words:"true"`
-	TokenxName         string `split_words:"true"`
+	TokenxName         string `split_words:"true" default:"tokendings"`
 	TokenxNamespace    string `split_words:"true"`
 	TexasImageName     string `split_words:"true" default:"ghcr.io/nais/texas"`
-	TexasImageTag      string `split_words:"true" default:"latest"`
+	TexasImageTag      string `split_words:"true"`
 	TexasPort          int32  `split_words:"true" default:"3000"`
 	TexasUrlEnvVarName string `split_words:"true" default:"TEXAS_URL"`
 }
@@ -17,7 +20,24 @@ type Config struct {
 var cfg Config
 
 func Load() error {
-	return envconfig.Process("accesserator", &cfg)
+	if err := envconfig.Process("accesserator", &cfg); err != nil {
+		return err
+	}
+
+	missing := make([]string, 0, 3)
+	if cfg.ClusterName == "" {
+		missing = append(missing, "ACCESSERATOR_CLUSTER_NAME")
+	}
+	if cfg.TokenxNamespace == "" {
+		missing = append(missing, "ACCESSERATOR_TOKENX_NAMESPACE")
+	}
+	if cfg.TexasImageTag == "" {
+		missing = append(missing, "ACCESSERATOR_TEXAS_IMAGE_TAG")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func Get() Config {
