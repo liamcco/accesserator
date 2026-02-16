@@ -77,12 +77,15 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return reconcile.Result{}, err
 	}
 
-	r.Recorder.Eventf(
-		securityConfig,
-		"Normal",
-		"ReconcileStarted",
-		fmt.Sprintf("SecurityConfig with name %s started.", req.String()),
-	)
+	emitLifecycleEvents := securityConfig.Status.ObservedGeneration != securityConfig.GetGeneration()
+	if emitLifecycleEvents {
+		r.Recorder.Eventf(
+			securityConfig,
+			"Normal",
+			"ReconcileStarted",
+			fmt.Sprintf("SecurityConfig with name %s started.", req.String()),
+		)
+	}
 	rlog.Debug("SecurityConfig found", "name", req.NamespacedName)
 
 	securityConfig.InitializeStatus()
@@ -154,13 +157,14 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.updateStatus(ctx, scope, deepCopiedSecurityConfig, controllerResources)
 	}()
 
-	return r.doReconcile(ctx, controllerResources, scope)
+	return r.doReconcile(ctx, controllerResources, scope, emitLifecycleEvents)
 }
 
 func (r *SecurityConfigReconciler) doReconcile(
 	ctx context.Context,
 	controllerResources []reconciliation.ControllerResource,
 	scope *state.Scope,
+	emitLifecycleEvents bool,
 ) (ctrl.Result, error) {
 	result := ctrl.Result{}
 	var errs []error
@@ -178,8 +182,13 @@ func (r *SecurityConfigReconciler) doReconcile(
 				),
 			)
 			errs = append(errs, err)
-		} else {
-			r.Recorder.Eventf(&scope.SecurityConfig, "Normal", fmt.Sprintf("%sReconciledSuccessfully", rf.GetResourceKind()), fmt.Sprintf("%s with name %s reconciled successfully.", rf.GetResourceKind(), rf.GetResourceName()))
+		} else if emitLifecycleEvents {
+			r.Recorder.Eventf(
+				&scope.SecurityConfig,
+				"Normal",
+				fmt.Sprintf("%sReconciledSuccessfully", rf.GetResourceKind()),
+				fmt.Sprintf("%s with name %s reconciled successfully.", rf.GetResourceKind(), rf.GetResourceName()),
+			)
 		}
 		if len(errs) > 0 {
 			continue
@@ -192,7 +201,9 @@ func (r *SecurityConfigReconciler) doReconcile(
 		r.Recorder.Eventf(&scope.SecurityConfig, "Error", "ReconcileFailed", "SecurityConfig failed during reconciliation")
 		return ctrl.Result{}, k8sErrors.NewAggregate(errs)
 	}
-	r.Recorder.Eventf(&scope.SecurityConfig, "Normal", "ReconcileSuccess", "SecurityConfig reconciled successfully")
+	if emitLifecycleEvents {
+		r.Recorder.Eventf(&scope.SecurityConfig, "Normal", "ReconcileSuccess", "SecurityConfig reconciled successfully")
+	}
 	return result, nil
 }
 
