@@ -1,14 +1,14 @@
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
-  name: token-x-disabled
+  name: token-x
 spec:
   skip: false
   concurrent: true
   skipDelete: false
   namespaceTemplate:
     metadata:
-      name: chainsaw-token-x-disabled
+      name: chainsaw-token-x
       labels:
         accesserator-webhooks: enabled
   steps:
@@ -30,14 +30,16 @@ spec:
                   enabled: true
         - assert:
             file: jwker.yaml
+        - assert:
+            file: netpol.yaml
         - script:
             content: |
-              until kubectl get deployment app -n chainsaw-token-x-disabled 2>/dev/null; do sleep 1; done
-              kubectl rollout status deployment/app -n chainsaw-token-x-disabled --timeout=10s
-              kubectl wait --for=condition=Ready pod -l app=app -n chainsaw-token-x-disabled --timeout=10s
+              until kubectl get deployment app -n chainsaw-token-x 2>/dev/null; do sleep 1; done
+              kubectl rollout status deployment/app -n chainsaw-token-x --timeout=10s
+              kubectl wait --for=condition=Ready pod -l app=app -n chainsaw-token-x --timeout=10s
         - script:
             content: |
-              kubectl exec -n chainsaw-token-x-disabled -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 1 || echo "TEXAS_URL is NOT set" && exit 0'
+              kubectl exec -n chainsaw-token-x -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 1 || echo "TEXAS_URL is NOT set" && exit 0'
         - patch:
             resource:
               apiVersion: skiperator.kartverket.no/v1alpha1
@@ -48,8 +50,8 @@ spec:
                   skiperator/security: "enabled"
         - script:
             content: |
-              kubectl rollout restart -n chainsaw-token-x-disabled deployment/app
-              kubectl rollout status -n chainsaw-token-x-disabled deployment/app
+              kubectl rollout restart -n chainsaw-token-x deployment/app
+              kubectl rollout status -n chainsaw-token-x deployment/app
         - script:
             content: |
-              kubectl exec -n chainsaw-token-x-disabled -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 0 || echo "TEXAS_URL is NOT set" && exit 1'
+              kubectl exec -n chainsaw-token-x -c app deploy/app -- sh -c 'printenv TEXAS_URL >/dev/null && echo "TEXAS_URL is set" && exit 0 || echo "TEXAS_URL is NOT set" && exit 1'
