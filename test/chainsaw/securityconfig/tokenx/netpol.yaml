@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: security-config-app-tokendings-egress
+spec:
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: obo
+          podSelector:
+            matchLabels:
+              app: tokendings
+  podSelector:
+    matchLabels:
+      app: app
+  policyTypes:
+    - Egress
