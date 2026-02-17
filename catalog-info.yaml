@@ -1,0 +1,45 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: accesserator
+  title: Accesserator
+  tags:
+    - public
+spec:
+  type: ops
+  owner: group:default/tilgangsstyring
+  lifecycle: production
+  system: system:default/skip
+  dependsOn:
+    - component:default/texas
+    - component:default/skip-apps
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: texas
+  title: Texas
+  tags:
+    - public
+spec:
+  type: service
+  owner: group:default/tilgangsstyring
+  lifecycle: production
+  providesApis:
+    - api:default/texas
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: texas
+  title: Texas
+  tags:
+    - public
+spec:
+  type: openapi
+  owner: group:default/tilgangsstyring
+  lifecycle: production
+  definition:
+    $text: https://raw.githubusercontent.com/nais/texas/refs/heads/master/doc/openapi-spec.json
