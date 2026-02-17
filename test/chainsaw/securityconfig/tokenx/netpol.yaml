@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: security-config-app-tokendings-egress
+  name: security-config-tokendings-egress
 spec:
   egress:
     - to:
