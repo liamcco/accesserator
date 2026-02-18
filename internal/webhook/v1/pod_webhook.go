@@ -38,6 +38,7 @@ const (
 	AzureEnabledEnvVarName        = "AZURE_ENABLED"
 	IdportenEnabledEnvVarName     = "IDPORTEN_ENABLED"
 	TokenXEnabledEnvVarName       = "TOKEN_X_ENABLED"
+	OpaEnabledEnvVarName          = "OPA_ENABLED"
 )
 
 // nolint:unused
@@ -239,23 +240,34 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct Texas container: %w", err)
 	}
-	opaContainer := getOpaContainer(*securityConfig)
-	opaConfigVolume := getOpaConfigVolume(*securityConfig)
+
+	opaContainer, err := getOpaContainer(*securityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Opa container: %w", err)
+	}
+
+	opaConfigVolume, err := getOpaConfigVolume(*securityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Opa config volume: %w", err)
+	}
 
 	return &PodSecurityConfiguration{
 		SecurityConfig:  securityConfig,
 		AppName:         appName,
 		SecurityEnabled: true,
 		TexasContainer:  *texasContainer,
-		OpaContainer:    opaContainer,
-		OpaConfigVolume: opaConfigVolume,
+		OpaContainer:    *opaContainer,
+		OpaConfigVolume: *opaConfigVolume,
 	}, nil
 }
 
-func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
-	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
+func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) (*corev1.Volume, error) {
+	if securityConfig.Spec.Opa == nil || !securityConfig.Spec.Opa.Enabled {
+		return &corev1.Volume{}, nil
+	}
 
-	return corev1.Volume{
+	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
+	return &corev1.Volume{
 		Name: expectedOpaConfigName,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -267,12 +279,12 @@ func getOpaConfigVolume(securityConfig v1alpha.SecurityConfig) corev1.Volume {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
-func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
+func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
 	if securityConfig.Spec.Opa == nil || !securityConfig.Spec.Opa.Enabled {
-		return corev1.Container{}
+		return &corev1.Container{}, nil
 	}
 
 	opaImageUrl := fmt.Sprintf(
@@ -284,7 +296,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
 	opaConfigFilePath := OpaConfigMountPath + "/" + utilities.OpaConfigFileName
 
-	return corev1.Container{
+	return &corev1.Container{
 		Name:  OpaInitContainerName,
 		Image: opaImageUrl,
 		Args: []string{
@@ -342,8 +354,12 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) corev1.Container {
 					ConfigMapKeyRef: &securityConfig.Spec.Opa.BundlePublicKey,
 				},
 			},
+			{
+				Name:  OpaEnabledEnvVarName,
+				Value: "true",
+			},
 		},
-	}
+	}, nil
 }
 
 func getTexasContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, error) {
@@ -509,7 +525,7 @@ func validateTokenxCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *Po
 }
 
 func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSecurityConfiguration) error {
-	// Validate that the Texas init container exists
+	// Validate that the Opa init container exists
 	hasOpaInitContainer := false
 	for _, initContainer := range pod.Spec.InitContainers {
 		if initContainer.Name == OpaInitContainerName {
@@ -542,8 +558,14 @@ func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSe
 		}
 	}
 	if !hasOpaUrlEnvVar {
-		podlog.Info("Opa is enabled but OPA_URL env var is missing", "container", securityConfigForPod.AppName)
-		return fmt.Errorf("Opa is enabled but container '%s' is missing environment variable '%s'", securityConfigForPod.AppName, config.Get().OpaUrlEnvVarName)
+		errMsg := fmt.Sprintf(
+			"Opa is enabled but %s env var is missing for pod from skiperator app with name %s/%s",
+			pod.Namespace,
+			securityConfigForPod.AppName,
+			config.Get().OpaUrlEnvVarName,
+		)
+		podlog.Info(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	return nil
 }
