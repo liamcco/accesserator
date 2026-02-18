@@ -3,9 +3,11 @@ package controller
 import (
 	"context"
 
+	"github.com/kartverket/accesserator/pkg/config"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,15 +24,15 @@ import (
 var _ = Describe("SecurityConfig Controller", func() {
 	Context("When reconciling a resource", func() {
 		const (
-			resourceName      = "test-resource"
-			skiperatorAppName = "test-app"
-			namespaceName     = "default"
+			securityConfigName = "test-resource"
+			skiperatorAppName  = "test-app"
+			namespaceName      = "default"
 		)
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
+			Name:      securityConfigName,
 			Namespace: namespaceName,
 		}
 		securityConfig := &accesseratorv1alpha.SecurityConfig{}
@@ -60,7 +62,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 			if err != nil && errors.IsNotFound(err) {
 				securityConfig := &accesseratorv1alpha.SecurityConfig{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
+						Name:      securityConfigName,
 						Namespace: namespaceName,
 					},
 					Spec: accesseratorv1alpha.SecurityConfigSpec{
@@ -91,6 +93,13 @@ var _ = Describe("SecurityConfig Controller", func() {
 				Expect(k8sClient.Delete(ctx, jwker)).To(Succeed())
 			}
 
+			By("Cleanup any created Netpol resource")
+			netpol := &v1.NetworkPolicy{}
+			netpolKey := types.NamespacedName{Name: utilities.GetTokenxEgressName(securityConfigName, config.Get().TokenxName), Namespace: namespaceName}
+			if err := k8sClient.Get(ctx, netpolKey, netpol); err == nil {
+				Expect(k8sClient.Delete(ctx, netpol)).To(Succeed())
+			}
+
 			skiperatorApp := &v1alpha1.Application{}
 			appKey := types.NamespacedName{Name: skiperatorAppName, Namespace: namespaceName}
 			err = k8sClient.Get(ctx, appKey, skiperatorApp)
@@ -100,7 +109,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 			Expect(k8sClient.Delete(ctx, skiperatorApp)).To(Succeed())
 		})
 
-		It("should create a Jwker resource when TokenX is enabled", func() {
+		It("should create a Jwker resource and a NetworkPolicy when TokenX is enabled", func() {
 			By("Reconciling the SecurityConfig with TokenX enabled")
 
 			fakeRecorder := record.NewFakeRecorder(100)
@@ -110,6 +119,16 @@ var _ = Describe("SecurityConfig Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that a NetworkPolicy resource was created")
+			netpol := &v1.NetworkPolicy{}
+			netpolKey := types.NamespacedName{
+				Name:      utilities.GetTokenxEgressName(securityConfigName, config.Get().TokenxName),
+				Namespace: namespaceName,
+			}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, netpolKey, netpol)
+			}).Should(Succeed())
 
 			By("Verifying that a Jwker resource was created")
 			jwker := &naisiov1.Jwker{}
@@ -159,7 +178,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 			Eventually(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ReconcileFailed")))
 		})
 
-		It("should NOT create a Jwker resource when TokenX is disabled", func() {
+		It("should NOT create a Jwker resource nor a NetworkPolicy resource when TokenX is disabled", func() {
 			By("Disabling TokenX on the SecurityConfig")
 			securityConfig := &accesseratorv1alpha.SecurityConfig{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, securityConfig)).To(Succeed())
@@ -187,6 +206,16 @@ var _ = Describe("SecurityConfig Controller", func() {
 				return errors.IsNotFound(err)
 			}).Should(BeTrue())
 
+			By("Verifying that no NetworkPolicy resource exists")
+			netpol := &v1.NetworkPolicy{}
+			Consistently(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      utilities.GetTokenxEgressName(securityConfigName, config.Get().TokenxName),
+					Namespace: namespaceName,
+				}, netpol)
+				return errors.IsNotFound(err)
+			}).Should(BeTrue())
+
 			By("Verifying events were emitted")
 			Eventually(fakeRecorder.Events).Should(Receive(ContainSubstring("ReconcileStarted")))
 			Eventually(fakeRecorder.Events).Should(Receive(ContainSubstring("ReconciledSuccessfully")))
@@ -195,6 +224,58 @@ var _ = Describe("SecurityConfig Controller", func() {
 			Eventually(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ReconcileFailed")))
 			Eventually(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("StatusUpdateFailed")))
 			Eventually(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ReconcileFailed")))
+		})
+
+		It("should recreate owned resources when they are deleted", func() {
+			By("Reconciling the SecurityConfig to create owned resources")
+
+			fakeRecorder := record.NewFakeRecorder(100)
+			controllerReconciler := getSecurityConfigReconciler(fakeRecorder)
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Deleting the owned NetworkPolicy resource")
+			netpol := &v1.NetworkPolicy{}
+			netpolKey := types.NamespacedName{
+				Name:      utilities.GetTokenxEgressName(securityConfigName, config.Get().TokenxName),
+				Namespace: namespaceName,
+			}
+			Expect(k8sClient.Get(ctx, netpolKey, netpol)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, netpol)).To(Succeed())
+
+			// In a real cluster, the controller would automatically reconcile when it detects the Jwker deletion. However, in envtest we need to manually trigger the reconciliation to simulate this behavior.
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that the NetworkPolicy resource is recreated")
+			Eventually(func() error {
+				return k8sClient.Get(ctx, netpolKey, netpol)
+			}).Should(Succeed())
+
+			By("Deleting the owned Jwker resource")
+			jwker := &naisiov1.Jwker{}
+			jwkerKey := types.NamespacedName{
+				Name:      utilities.GetJwkerName(skiperatorAppName),
+				Namespace: namespaceName,
+			}
+			Expect(k8sClient.Get(ctx, jwkerKey, jwker)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, jwker)).To(Succeed())
+
+			// In a real cluster, the controller would automatically reconcile when it detects the Jwker deletion. However, in envtest we need to manually trigger the reconciliation to simulate this behavior.
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that the Jwker resource is recreated")
+			Eventually(func() error {
+				return k8sClient.Get(ctx, jwkerKey, jwker)
+			}).Should(Succeed())
 		})
 	})
 })

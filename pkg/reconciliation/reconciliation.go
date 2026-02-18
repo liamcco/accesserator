@@ -165,7 +165,7 @@ func ReconcileControllerResource[T client.Object](
 			scheme,
 		); controllerRefErr != nil {
 			errorReason := fmt.Sprintf(
-				"Unable to set AuthPolicy ownerReference on %s %s/%s.",
+				"Unable to set ownerReference on %s %s/%s.",
 				kind,
 				deReferencedDesired.GetNamespace(),
 				deReferencedDesired.GetName(),

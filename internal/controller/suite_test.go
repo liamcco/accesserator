@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -55,13 +56,15 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = naisiov1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = networkingv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Load environment variables
 	err = os.Setenv("ACCESSERATOR_CLUSTER_NAME", "test-cluster")
 	Expect(err).NotTo(HaveOccurred())
-	err = os.Setenv("ACCESSERATOR_TOKENX_NAME", "test-name")
-	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("ACCESSERATOR_TOKENX_NAMESPACE", "test-namespace")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ACCESSERATOR_TEXAS_IMAGE_TAG", "a-random-tag")
 	Expect(err).NotTo(HaveOccurred())
 	err = config.Load()
 	Expect(err).NotTo(HaveOccurred())

@@ -26,7 +26,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -42,8 +44,12 @@ type SecurityConfigReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&accesseratorv1alpha.SecurityConfig{}).
+		For(
+			&accesseratorv1alpha.SecurityConfig{},
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		).
 		Owns(&naisiov1.Jwker{}).
+		Owns(&networkv1.NetworkPolicy{}).
 		Watches(&v1alpha1.Application{}, eventhandler.HandleSkiperatorApplicationEvent(r.Client)).
 		Named("securityconfig").
 		Complete(r)
@@ -77,6 +83,7 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		"ReconcileStarted",
 		fmt.Sprintf("SecurityConfig with name %s started.", req.String()),
 	)
+
 	rlog.Debug("SecurityConfig found", "name", req.NamespacedName)
 
 	securityConfig.InitializeStatus()
@@ -173,7 +180,12 @@ func (r *SecurityConfigReconciler) doReconcile(
 			)
 			errs = append(errs, err)
 		} else {
-			r.Recorder.Eventf(&scope.SecurityConfig, "Normal", fmt.Sprintf("%sReconciledSuccessfully", rf.GetResourceKind()), fmt.Sprintf("%s with name %s reconciled successfully.", rf.GetResourceKind(), rf.GetResourceName()))
+			r.Recorder.Eventf(
+				&scope.SecurityConfig,
+				"Normal",
+				fmt.Sprintf("%sReconciledSuccessfully", rf.GetResourceKind()),
+				fmt.Sprintf("%s with name %s reconciled successfully.", rf.GetResourceKind(), rf.GetResourceName()),
+			)
 		}
 		if len(errs) > 0 {
 			continue
