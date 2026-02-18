@@ -15,7 +15,17 @@ import (
 func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securityConfig v1alpha.SecurityConfig) (*state.Scope, error) {
 	tokenXEnabled := securityConfig.Spec.Tokenx != nil && securityConfig.Spec.Tokenx.Enabled
 	opaConfigEnabled := securityConfig.Spec.Opa != nil && securityConfig.Spec.Opa.Enabled
-	bundleUrl := securityConfig.Spec.Opa.BundlePath + ":" + securityConfig.Spec.Opa.BundleVersion
+
+	bundleUrl := ""
+	if opaConfigEnabled {
+		if securityConfig.Spec.Opa.BundlePath == "" {
+			return nil, fmt.Errorf("OPA is enabled but BundlePath is not set in SecurityConfig %s/%s", securityConfig.Namespace, securityConfig.Name)
+		}
+		if securityConfig.Spec.Opa.BundleVersion == "" {
+			return nil, fmt.Errorf("OPA is enabled but BundleVersion is not set in SecurityConfig %s/%s", securityConfig.Namespace, securityConfig.Name)
+		}
+		bundleUrl = securityConfig.Spec.Opa.BundlePath + ":" + securityConfig.Spec.Opa.BundleVersion
+	}
 
 	if !tokenXEnabled {
 		return &state.Scope{
