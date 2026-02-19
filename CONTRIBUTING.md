@@ -1,5 +1,13 @@
 # Contributing guides
 
+## Branch Workflow Conventions (OPA Fork)
+
+Follow these rules when contributing to the OPA fork:
+
+1. Start all work from `integrate-opa`.
+2. Rebase your branch onto `integrate-opa` before merging.
+3. Do not commit directly to `main`.
+
 ## Run accesserator locally
  
 We use a `Makefile` to simplify all the steps involved in running accesserator locally.
