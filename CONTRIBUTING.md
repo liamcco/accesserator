@@ -20,6 +20,14 @@ The local Kubernetes cluster will have the following components installed and co
 - Ztoperator to handle OAuth2 authorization code flow and JWT verification and authorization for workloads in the cluster
 - Mock-OAuth2-Server to mock an external identity provider for testing purposes.
 
+## Branch Workflow Conventions (OPA Fork)
+
+Follow these rules when contributing to the OPA fork:
+
+1. Start all work from `integrate-opa`.
+2. Rebase your branch onto `integrate-opa` before merging.
+3. Do not commit directly to `main`.
+
 ## Run accesserator locally
 
 ### Run on your host machine
