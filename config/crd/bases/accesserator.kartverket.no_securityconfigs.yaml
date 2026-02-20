@@ -50,9 +50,6 @@ spec:
               opa:
                 description: OpaSpec defines the configuration for OPA sidecar.
                 properties:
-                  bundlePath:
-                    description: BundlePath is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle.
-                    type: string
                   bundlePublicKey:
                     description: |-
                       BundlePublicKey is a reference to the ConfigMap and key containing the public key
@@ -78,14 +75,31 @@ spec:
                     - key
                     type: object
                     x-kubernetes-map-type: atomic
-                  bundleVersion:
-                    description: BundleVersion is the tag or digest for the bundle
-                      reference, e.g. v3.0.1.
-                    type: string
                   enabled:
                     description: Enabled indicates whether the OPA sidecar should
                       be included for the application.
                     type: boolean
+                  ghcr:
+                    description: Ghcr is the configuration for GitHub Container Registry
+                      (GHCR) integration.
+                    properties:
+                      bundlePath:
+                        description: BundlePath is the OCI bundle reference, e.g.
+                          ghcr.io/org/opa-bundle.
+                        type: string
+                      bundleResource:
+                        description: BundleResource is the name of the resource within
+                          the GHCR registry or PV that contains the OPA bundle.
+                        type: string
+                      bundleVersion:
+                        description: BundleVersion is the tag or digest for the bundle
+                          reference, e.g. v3.0.1.
+                        type: string
+                    required:
+                    - bundlePath
+                    - bundleResource
+                    - bundleVersion
+                    type: object
                   githubToken:
                     description: GithubToken is a reference to the Secret and key
                       containing the GitHub token.
@@ -111,6 +125,28 @@ spec:
                     - key
                     type: object
                     x-kubernetes-map-type: atomic
+                  pv:
+                    description: Pv is the configuration for Persistent Volume (PV)
+                      integration.
+                    properties:
+                      bundlePath:
+                        description: |-
+                          BundlePath is where bundle files are mounted inside OPA-related containers.
+                          used to verify bundle signatures.
+                        type: string
+                      bundleResource:
+                        description: BundleResource is the expected local bundle file
+                          consumed by OPA in PVC mode.
+                        type: string
+                      bundleVersion:
+                        description: BundleVersion is the tag or digest for the bundle
+                          reference, e.g. v3.0.1.
+                        type: string
+                    required:
+                    - bundlePath
+                    - bundleResource
+                    - bundleVersion
+                    type: object
                 required:
                 - bundlePublicKey
                 - enabled

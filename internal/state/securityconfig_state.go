@@ -31,6 +31,21 @@ type TokenXConfig struct {
 type OpaConfig struct {
 	Enabled   bool
 	BundleUrl string
+	Opa GhcrSpec
+	Pv PvSpec
+}
+
+type GhcrSpec struct {
+	GithubToken string
+	BundlePath    string
+	BundlePublicKey string
+	BundleVersion string
+}
+
+type PvSpec struct {
+	BundleFileName bool
+	BundleMountPath string
+	BundleVolumeName string
 }
 
 type Descendant[T client.Object] struct {

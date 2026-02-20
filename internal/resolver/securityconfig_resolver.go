@@ -18,13 +18,13 @@ func ResolveSecurityConfig(ctx context.Context, k8sClient client.Client, securit
 
 	bundleUrl := ""
 	if opaConfigEnabled {
-		if securityConfig.Spec.Opa.BundlePath == "" {
+		if securityConfig.Spec.Opa.Ghcr.BundlePath == "" {
 			return nil, fmt.Errorf("OPA is enabled but BundlePath is not set in SecurityConfig %s/%s", securityConfig.Namespace, securityConfig.Name)
 		}
-		if securityConfig.Spec.Opa.BundleVersion == "" {
+		if securityConfig.Spec.Opa.Ghcr.BundleVersion == "" {
 			return nil, fmt.Errorf("OPA is enabled but BundleVersion is not set in SecurityConfig %s/%s", securityConfig.Namespace, securityConfig.Name)
 		}
-		bundleUrl = securityConfig.Spec.Opa.BundlePath + ":" + securityConfig.Spec.Opa.BundleVersion
+		bundleUrl = securityConfig.Spec.Opa.Ghcr.BundlePath + ":" + securityConfig.Spec.Opa.Ghcr.BundleVersion
 	}
 
 	if !tokenXEnabled {

@@ -5,6 +5,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/kartverket/accesserator/api/v1alpha"
 	"github.com/kartverket/accesserator/internal/state"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	corev1 "k8s.io/api/core/v1"
@@ -43,6 +44,13 @@ type Bearer struct {
 	Token  QuotedString `yaml:"token"`
 }
 
+type GhcrSpec struct {
+	BundlePath 		string 		`yaml:"url"`
+	Type 			string 		`yaml:"type"`
+	BundleResource 	string		`yaml:"resource"`
+	Credentials 	Credentials	`yaml:"credentials"`
+}
+
 type Bundle struct {
 	Service  string  `yaml:"service"`
 	Resource string  `yaml:"resource"`
@@ -74,6 +82,44 @@ func (q QuotedString) MarshalYAML() (interface{}, error) {
 	}, nil
 }
 
+func applyGhcrBundle(cfg *OPAConfig, ghcr *v1alpha.GhcrSpec, githubTokenVar QuotedString) {
+	cfg.Services = map[string]Service{
+		"ghcr-registry": {
+			URL:  "https://ghcr.io",
+			Type: "oci",
+			Credentials: Credentials{
+				Bearer: Bearer{ Scheme: "Bearer", Token: githubTokenVar },
+			},
+		},
+	}
+	
+	cfg.Bundles = map[string]Bundle{
+		"authz": {
+			Service:  "ghcr-registry",
+			Resource: ghcr.BundlePath + ":" + ghcr.BundleVersion,
+			Polling:  Polling{MinDelaySeconds: 10, MaxDelaySeconds: 30},
+			Signing:  Signing{KeyID: "bundle-verification-key"},
+		},
+	}
+}
+
+func applyPvBundle(cfg *OPAConfig, pv *v1alpha.PvSpec) {
+  	cfg.Services = map[string]Service{
+		"local-bundle": {
+			URL:  pv.BundlePath,
+		},
+	}
+
+  	cfg.Bundles = map[string]Bundle{
+    	"authz": {
+			Service: "local-bundle",
+			Resource: pv.BundleResource,
+			Polling:  Polling{MinDelaySeconds: 10, MaxDelaySeconds: 30},
+			Signing:  Signing{KeyID: "bundle-verification-key"},
+    	},
+  	}
+}
+
 func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 	if !scope.OpaConfig.Enabled {
 		return nil
@@ -83,6 +129,47 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 	publicKeyVar := QuotedString("${" + utilities.OpaPublicKeyEnvVar + "}")
 
 	cfg := OPAConfig{
+		Plugins: map[string]EnvoyExtAuthzGrpc{
+		"envoy_ext_authz_grpc": { Addr: ":9191", Path: "istio/authz/allow" },
+		},
+		DecisionLogs: DecisionLogs{Console: true},
+
+		Keys: map[string]Key{
+			"bundle-verification-key": { Algorithm: "RS256", Key: publicKeyVar },
+		},
+  	}
+
+	opa := scope.SecurityConfig.Spec.Opa
+
+	switch {
+		case opa.Ghcr != nil:
+			applyGhcrBundle(&cfg, opa.Ghcr, githubTokenVar)
+
+		case opa.Pv != nil:
+			applyPvBundle(&cfg, opa.Pv)
+
+		default:
+	}	
+
+	configYAML, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil
+	}
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: objectMeta,
+		Data: map[string]string{
+			utilities.OpaConfigFileName: string(configYAML),
+		},
+	}
+
+	return configMap
+}
+
+
+/**
+
+	cfg1 := OPAConfig{
 		Plugins: map[string]EnvoyExtAuthzGrpc{
 			"envoy_ext_authz_grpc": {
 				Addr: ":9191",
@@ -105,7 +192,7 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		Bundles: map[string]Bundle{
 			"authz": {
 				Service:  "ghcr-registry",
-				Resource: scope.OpaConfig.BundleUrl,
+				Resource: scope.OpaConfig.Opa.BundlePath,
 				Polling: Polling{
 					MinDelaySeconds: 10,
 					MaxDelaySeconds: 30,
@@ -123,17 +210,4 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		},
 	}
 
-	configYAML, err := yaml.Marshal(cfg)
-	if err != nil {
-		return nil
-	}
-
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: objectMeta,
-		Data: map[string]string{
-			utilities.OpaConfigFileName: string(configYAML),
-		},
-	}
-
-	return configMap
-}
+*/

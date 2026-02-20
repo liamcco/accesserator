@@ -38,7 +38,7 @@ type SecurityConfigSpec struct {
 	// ApplicationRef is a reference to the name of the SKIP application for which this SecurityConfig applies.
 	//
 	// +kubebuilder:validation:Required
-	ApplicationRef string `json:"applicationRef,omitempty"`
+	ApplicationRef string `json:"applicationRef"`
 }
 
 // TokenXSpec defines the configuration for token exchange sidecar.
@@ -71,15 +71,57 @@ type OpaSpec struct {
 	// +kubebuilder:validation:Required
 	BundlePublicKey corev1.ConfigMapKeySelector `json:"bundlePublicKey"`
 
-	// BundlePath is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle.
+
+	// Ghcr is the configuration for GitHub Container Registry (GHCR) integration.
 	//
 	// +kubebuilder:validation:Optional
+	Ghcr *GhcrSpec `json:"ghcr,omitempty"`
+	
+	// Pv is the configuration for Persistent Volume (PV) integration.
+	//
+	// +kubebuilder:validation:Optional
+	Pv *PvSpec `json:"pv,omitempty"`
+}
+
+type GhcrSpec struct {
+	// BundlePath is the OCI bundle reference, e.g. ghcr.io/org/opa-bundle.
+	//
+	// +kubebuilder:validation:Required
 	BundlePath string `json:"bundlePath,omitempty"`
+
+	// BundleResource is the name of the resource within the GHCR registry or PV that contains the OPA bundle.
+	//
+	// +kubebuilder:validation:Required
+	BundleResource string `json:"bundleResource,omitempty"`
 
 	// BundleVersion is the tag or digest for the bundle reference, e.g. v3.0.1.
 	//
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
 	BundleVersion string `json:"bundleVersion,omitempty"`
+}
+
+type PvSpec struct {
+
+	// BundlePath is where bundle files are mounted inside OPA-related containers.
+	// used to verify bundle signatures.
+	//
+	// +kubebuilder:validation:Required
+	BundlePath string `json:"bundlePath"`
+
+	// BundleResource is the expected local bundle file consumed by OPA in PVC mode.
+	//
+	// +kubebuilder:validation:Required
+	BundleResource string `json:"bundleResource"`
+
+	// BundleVersion is the tag or digest for the bundle reference, e.g. v3.0.1.
+	//
+	// +kubebuilder:validation:Required
+	BundleVersion string `json:"bundleVersion,omitempty"`
+
+	// BundleVolumeName is the shared pod volume name for OPA bundle storage.
+	//
+	// +kubebuilder:validation:Optional
+	//BundleVolumeName string `json:"bundleVolumeName,omitempty"`
 }
 
 // SecurityConfigStatus defines the observed state of SecurityConfig.

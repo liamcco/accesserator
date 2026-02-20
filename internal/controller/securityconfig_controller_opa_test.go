@@ -67,8 +67,10 @@ var _ = Describe("SecurityConfig Controller", func() {
 						ApplicationRef: skiperatorAppName,
 						Opa: &accesseratorv1alpha.OpaSpec{
 							Enabled:       true,
-							BundlePath:    "ghcr.io/kartverket/taaask-poc",
-							BundleVersion: "latest",
+							Ghcr: &accesseratorv1alpha.GhcrSpec{
+								BundlePath:    "ghcr.io/kartverket/taaask-poc",
+								BundleVersion: "latest",
+						},
 						},
 					},
 				}
