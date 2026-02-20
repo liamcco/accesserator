@@ -41,3 +41,22 @@ curl -X POST $TEXAS_URL/api/v1/token/exchange \
     "user_token": "<USER_TOKEN>"
   }'
 ```
+
+
+## Opa sidecar creation
+
+(in k8s/)
+```bash
+make clean local deploy
+cd example && make example
+```
+
+1. Check that "Bundle loaded and activated successfully"
+2. Update example.yaml to a new version
+
+(in examples/)
+```bash
+make example
+```
+
+1. Check that "Bundle loaded and activated successfully"
