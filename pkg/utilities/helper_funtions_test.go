@@ -41,6 +41,35 @@ func TestGetJwkerSecretName(t *testing.T) {
 	assert.Equal(t, want, GetJwkerSecretName(jwkerName))
 }
 
+func TestGetOpaDiscoveryNames(t *testing.T) {
+	appRef := "my-app"
+	assert.Equal(
+		t,
+		fmt.Sprintf("%s-%s", appRef, OpaDiscoveryConfigNameSuffix),
+		GetOpaDiscoveryConfigName(appRef),
+	)
+	assert.Equal(
+		t,
+		fmt.Sprintf("%s-%s", appRef, OpaDiscoveryServiceNameSuffix),
+		GetOpaDiscoveryServiceName(appRef),
+	)
+	assert.Equal(
+		t,
+		fmt.Sprintf("%s-%s", appRef, OpaDiscoveryDeploymentNameSuffix),
+		GetOpaDiscoveryDeploymentName(appRef),
+	)
+	assert.Equal(
+		t,
+		fmt.Sprintf("%s-%s", appRef, OpaDiscoveryEgressNameSuffix),
+		GetOpaDiscoveryEgressPolicyName(appRef),
+	)
+	assert.Equal(
+		t,
+		fmt.Sprintf("%s-%s", appRef, OpaDiscoveryIngressNameSuffix),
+		GetOpaDiscoveryIngressPolicyName(appRef),
+	)
+}
+
 func TestGetTokenxEgressName(t *testing.T) {
 	secName := "sec"
 	tokenx := "tok"
