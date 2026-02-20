@@ -46,6 +46,26 @@ func GetOpaConfigName(applicationRef string) string {
 	}
 }
 
+func GetOpaDiscoveryConfigName(applicationRef string) string {
+	return fmt.Sprintf("%s-%s", applicationRef, OpaDiscoveryConfigNameSuffix)
+}
+
+func GetOpaDiscoveryServiceName(applicationRef string) string {
+	return fmt.Sprintf("%s-%s", applicationRef, OpaDiscoveryServiceNameSuffix)
+}
+
+func GetOpaDiscoveryDeploymentName(applicationRef string) string {
+	return fmt.Sprintf("%s-%s", applicationRef, OpaDiscoveryDeploymentNameSuffix)
+}
+
+func GetOpaDiscoveryEgressPolicyName(applicationRef string) string {
+	return fmt.Sprintf("%s-%s", applicationRef, OpaDiscoveryEgressNameSuffix)
+}
+
+func GetOpaDiscoveryIngressPolicyName(applicationRef string) string {
+	return fmt.Sprintf("%s-%s", applicationRef, OpaDiscoveryIngressNameSuffix)
+}
+
 func GetJwkerSecretName(jwkerName string) string {
 	return fmt.Sprintf("%s-%s", jwkerName, JwkerSecretNameSuffix)
 }
