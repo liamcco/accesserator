@@ -15,7 +15,7 @@ type OPAConfig struct {
 	Plugins      map[string]EnvoyExtAuthzGrpc `yaml:"plugins"`
 	DecisionLogs DecisionLogs                 `yaml:"decision_logs"`
 	Services     map[string]Service           `yaml:"services"`
-	Bundles      map[string]Bundle            `yaml:"bundles"`
+	Discovery    Discovery                    `yaml:"discovery"`
 	Keys         map[string]Key               `yaml:"keys"`
 }
 
@@ -29,9 +29,9 @@ type DecisionLogs struct {
 }
 
 type Service struct {
-	URL         string      `yaml:"url"`
-	Type        string      `yaml:"type"`
-	Credentials Credentials `yaml:"credentials"`
+	URL         string       `yaml:"url"`
+	Type        string       `yaml:"type,omitempty"`
+	Credentials *Credentials `yaml:"credentials,omitempty"`
 }
 
 type Credentials struct {
@@ -44,19 +44,25 @@ type Bearer struct {
 }
 
 type Bundle struct {
-	Service  string  `yaml:"service"`
-	Resource string  `yaml:"resource"`
-	Polling  Polling `yaml:"polling"`
-	Signing  Signing `yaml:"signing"`
+	Service  string  `yaml:"service" json:"service"`
+	Resource string  `yaml:"resource" json:"resource"`
+	Polling  Polling `yaml:"polling" json:"polling"`
+	Signing  Signing `yaml:"signing" json:"signing"`
+}
+
+type Discovery struct {
+	Service  string  `yaml:"service" json:"service"`
+	Resource string  `yaml:"resource" json:"resource"`
+	Polling  Polling `yaml:"polling" json:"polling"`
 }
 
 type Polling struct {
-	MinDelaySeconds int `yaml:"min_delay_seconds"`
-	MaxDelaySeconds int `yaml:"max_delay_seconds"`
+	MinDelaySeconds int `yaml:"min_delay_seconds" json:"min_delay_seconds"`
+	MaxDelaySeconds int `yaml:"max_delay_seconds" json:"max_delay_seconds"`
 }
 
 type Signing struct {
-	KeyID string `yaml:"keyid"`
+	KeyID string `yaml:"keyid" json:"keyid"`
 }
 
 type Key struct {
@@ -94,25 +100,23 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 			"ghcr-registry": {
 				URL:  "https://ghcr.io",
 				Type: "oci",
-				Credentials: Credentials{
+				Credentials: &Credentials{
 					Bearer: Bearer{
 						Scheme: "Bearer",
 						Token:  githubTokenVar,
 					},
 				},
 			},
+			"discovery-server": {
+				URL: "http://" + utilities.GetOpaDiscoveryServiceName(scope.SecurityConfig.Spec.ApplicationRef) + "." + scope.SecurityConfig.Namespace + ".svc.cluster.local",
+			},
 		},
-		Bundles: map[string]Bundle{
-			"authz": {
-				Service:  "ghcr-registry",
-				Resource: scope.OpaConfig.BundleUrl,
-				Polling: Polling{
-					MinDelaySeconds: 10,
-					MaxDelaySeconds: 30,
-				},
-				Signing: Signing{
-					KeyID: "bundle-verification-key",
-				},
+		Discovery: Discovery{
+			Service:  "discovery-server",
+			Resource: GetOpaDiscoveryResourcePath(),
+			Polling: Polling{
+				MinDelaySeconds: 10,
+				MaxDelaySeconds: 30,
 			},
 		},
 		Keys: map[string]Key{
