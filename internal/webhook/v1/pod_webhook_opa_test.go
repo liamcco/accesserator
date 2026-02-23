@@ -8,6 +8,7 @@ import (
 	"github.com/kartverket/accesserator/pkg/config"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1"
+	"github.com/kartverket/skiperator/api/v1alpha1/podtypes"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -128,19 +129,21 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 				},
 			}
 
+			skiperatorApp := &v1alpha1.Application{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      skiperatorAppName,
+					Namespace: pod.Namespace,
+					Labels: map[string]string{
+						SecurityEnabledLabelName: SecurityEnabledLabelValue,
+					},
+				},
+			}
+
 			cfg, err := getSecurityConfigForPod(
 				ctx,
 				utilities.GetMockKubernetesClient(
 					scheme,
-					&v1alpha1.Application{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      skiperatorAppName,
-							Namespace: pod.Namespace,
-							Labels: map[string]string{
-								SecurityEnabledLabelName: SecurityEnabledLabelValue,
-							},
-						},
-					},
+					skiperatorApp,
 					&securityConfig,
 				),
 				pod,
@@ -156,12 +159,13 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*cfg).To(Equal(
 				PodSecurityConfiguration{
-					SecurityConfig:  &securityConfig,
-					AppName:         skiperatorAppName,
-					SecurityEnabled: true,
-					TexasContainer:  *texasContainer,
-					OpaContainer:    *opaContainer,
-					OpaConfigVolume: *opaVolume,
+					SecurityConfig:         &securityConfig,
+					SkiperatorAccessPolicy: skiperatorApp.Spec.AccessPolicy,
+					AppName:                skiperatorAppName,
+					SecurityEnabled:        true,
+					TexasContainer:         *texasContainer,
+					OpaContainer:           *opaContainer,
+					OpaConfigVolume:        *opaVolume,
 				},
 			))
 		})
@@ -221,6 +225,119 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 	})
 
 	Describe("validateOpaCorrectlyConfigured", func() {
+		It("returns error when OPA is enabled but Application accessPolicy is missing required external hosts", func() {
+			skiperatorAppName := skiperatorAppName
+			securityConfig := v1alpha.SecurityConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "security-config",
+					Namespace: "ns",
+				},
+				Spec: v1alpha.SecurityConfigSpec{
+					Opa: &v1alpha.OpaSpec{
+						Enabled:    true,
+						BundlePath: "ghcr.io/kartverket/opa-bundle",
+					},
+					ApplicationRef: skiperatorAppName,
+				},
+			}
+			opaContainer, getOpaErr := getOpaContainer(securityConfig)
+			Expect(getOpaErr).ToNot(HaveOccurred())
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "p",
+					Namespace: securityConfig.Namespace,
+					Labels: map[string]string{
+						SkiperatorApplicationRefLabel: skiperatorAppName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{*opaContainer},
+					Containers: []corev1.Container{
+						{
+							Name: skiperatorAppName,
+							Env: []corev1.EnvVar{
+								{Name: config.Get().OpaUrlEnvVarName, Value: getOpaUrlEnvVarValue()},
+							},
+						},
+					},
+				},
+			}
+
+			podSecurityConfig := PodSecurityConfiguration{
+				SecurityConfig:  &securityConfig,
+				AppName:         skiperatorAppName,
+				SecurityEnabled: true,
+				OpaContainer:    *opaContainer,
+			}
+
+			err := validateOpaCorrectlyConfigured(pod, &podSecurityConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("accessPolicy.outbound.external"))
+			Expect(err.Error()).To(ContainSubstring("ghcr.io"))
+			Expect(err.Error()).To(ContainSubstring("pkg-containers.githubusercontent.com"))
+			Expect(err.Error()).To(ContainSubstring("objects.githubusercontent.com"))
+		})
+
+		It("returns no error when OPA is enabled and required GHCR/GitHub external hosts are allowed", func() {
+			skiperatorAppName := skiperatorAppName
+			securityConfig := v1alpha.SecurityConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "security-config",
+					Namespace: "ns",
+				},
+				Spec: v1alpha.SecurityConfigSpec{
+					Opa: &v1alpha.OpaSpec{
+						Enabled:    true,
+						BundlePath: "ghcr.io/kartverket/opa-bundle",
+					},
+					ApplicationRef: skiperatorAppName,
+				},
+			}
+			opaContainer, getOpaErr := getOpaContainer(securityConfig)
+			Expect(getOpaErr).ToNot(HaveOccurred())
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "p",
+					Namespace: securityConfig.Namespace,
+					Labels: map[string]string{
+						SkiperatorApplicationRefLabel: skiperatorAppName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{*opaContainer},
+					Containers: []corev1.Container{
+						{
+							Name: skiperatorAppName,
+							Env: []corev1.EnvVar{
+								{Name: config.Get().OpaUrlEnvVarName, Value: getOpaUrlEnvVarValue()},
+							},
+						},
+					},
+				},
+			}
+
+			podSecurityConfig := PodSecurityConfiguration{
+				SecurityConfig: &securityConfig,
+				SkiperatorAccessPolicy: &podtypes.AccessPolicy{
+					Outbound: podtypes.OutboundPolicy{
+						External: []podtypes.ExternalRule{
+							{Host: "ghcr.io", Ports: []podtypes.ExternalPort{{Name: "https", Protocol: "HTTPS", Port: 443}}},
+							{Host: "pkg-containers.githubusercontent.com"},
+							{Host: "objects.githubusercontent.com"},
+						},
+					},
+				},
+				AppName:         skiperatorAppName,
+				SecurityEnabled: true,
+				OpaContainer:    *opaContainer,
+			}
+
+			err := validateOpaCorrectlyConfigured(pod, &podSecurityConfig)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("returns error when pod should have opa init container but it does not have opa init container", func() {
 			skiperatorAppName := skiperatorAppName
 			pod := &corev1.Pod{
