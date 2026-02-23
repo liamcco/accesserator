@@ -40,33 +40,51 @@ type Config struct {
 }
 
 func FetchAndVerifyToFile(ctx context.Context, cfg Config) error {
+	_, _, err := FetchAndVerifyToFileIfChanged(ctx, cfg, "")
+	return err
+}
+
+func FetchAndVerifyToFileIfChanged(ctx context.Context, cfg Config, lastRemoteDigest string) (string, bool, error) {
 	if err := validateConfig(cfg); err != nil {
-		return err
+		return lastRemoteDigest, false, err
 	}
 
 	token, err := readOptionalTrimmedFile(cfg.GithubTokenFile)
 	if err != nil {
-		return fmt.Errorf("read github token: %w", err)
+		return lastRemoteDigest, false, fmt.Errorf("read github token: %w", err)
 	}
+
+	remoteDigest, err := fetchOCIBundleRemoteDigest(ctx, cfg.BundleRef, token)
+	if err != nil {
+		return lastRemoteDigest, false, err
+	}
+	if remoteDigest == lastRemoteDigest && fileExists(cfg.OutputFile) {
+		return remoteDigest, false, nil
+	}
+
 	publicKeyPEM, err := os.ReadFile(cfg.PublicKeyFile)
 	if err != nil {
-		return fmt.Errorf("read public key: %w", err)
+		return lastRemoteDigest, false, fmt.Errorf("read public key: %w", err)
 	}
 
 	mirroredBundle, err := fetchOCIBundleArchive(ctx, cfg.BundleRef, token)
 	if err != nil {
-		return err
+		return lastRemoteDigest, false, err
 	}
 	if err := verifyBundleArchiveSignature(mirroredBundle, publicKeyPEM, cfg.ExpectedKeyID); err != nil {
-		return err
+		return lastRemoteDigest, false, err
 	}
 
 	unsignedBundle, err := stripBundleSignatureFile(mirroredBundle)
 	if err != nil {
-		return err
+		return lastRemoteDigest, false, err
 	}
 
-	return writeFileAtomically(cfg.OutputFile, unsignedBundle, 0o644)
+	if err := writeFileAtomically(cfg.OutputFile, unsignedBundle, 0o644); err != nil {
+		return lastRemoteDigest, false, err
+	}
+
+	return remoteDigest, true, nil
 }
 
 func validateConfig(cfg Config) error {
@@ -106,6 +124,11 @@ func writeFileAtomically(outputPath string, content []byte, mode os.FileMode) er
 		return fmt.Errorf("move bundle file into place: %w", err)
 	}
 	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func stripBundleSignatureFile(bundleArchive []byte) ([]byte, error) {
@@ -172,15 +195,7 @@ func fetchOCIBundleArchive(ctx context.Context, bundleRef, githubToken string) (
 		return nil, fmt.Errorf("parse bundle ref: %w", err)
 	}
 
-	options := []remote.Option{remote.WithContext(ctx)}
-	if githubToken != "" {
-		options = append(options, remote.WithAuth(&authn.Basic{
-			Username: "oauth2",
-			Password: githubToken,
-		}))
-	} else {
-		options = append(options, remote.WithAuth(authn.Anonymous))
-	}
+	options := remoteOptions(ctx, githubToken)
 
 	img, err := remote.Image(ref, options...)
 	if err != nil {
@@ -202,6 +217,30 @@ func fetchOCIBundleArchive(ctx context.Context, bundleRef, githubToken string) (
 		return nil, fmt.Errorf("read compressed bundle layer: %w", err)
 	}
 	return content, nil
+}
+
+func fetchOCIBundleRemoteDigest(ctx context.Context, bundleRef, githubToken string) (string, error) {
+	ref, err := name.ParseReference(bundleRef)
+	if err != nil {
+		return "", fmt.Errorf("parse bundle ref: %w", err)
+	}
+
+	desc, err := remote.Get(ref, remoteOptions(ctx, githubToken)...)
+	if err != nil {
+		return "", fmt.Errorf("read bundle descriptor: %w", err)
+	}
+	return desc.Digest.String(), nil
+}
+
+func remoteOptions(ctx context.Context, githubToken string) []remote.Option {
+	options := []remote.Option{remote.WithContext(ctx)}
+	if githubToken != "" {
+		return append(options, remote.WithAuth(&authn.Basic{
+			Username: "oauth2",
+			Password: githubToken,
+		}))
+	}
+	return append(options, remote.WithAuth(authn.Anonymous))
 }
 
 func selectBundleLayer(img v1.Image) (v1.Layer, error) {

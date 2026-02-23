@@ -34,11 +34,14 @@ func main() {
 		OutputFile:      outputFile,
 	}
 
-	if err := discoveryserver.FetchAndVerifyToFile(context.Background(), cfg); err != nil {
+	lastDigest, changed, err := discoveryserver.FetchAndVerifyToFileIfChanged(context.Background(), cfg, "")
+	if err != nil {
 		log.Printf("failed to fetch and verify bundle: %v", err)
 		os.Exit(1)
 	}
-	log.Printf("bundle fetched and verified; refresh interval=%s", refreshInterval)
+	if changed {
+		log.Printf("bundle fetched and verified; digest=%s refresh interval=%s", lastDigest, refreshInterval)
+	}
 
 	if refreshInterval <= 0 {
 		select {}
@@ -47,10 +50,16 @@ func main() {
 	ticker := time.NewTicker(refreshInterval)
 	defer ticker.Stop()
 	for range ticker.C {
-		if err := discoveryserver.FetchAndVerifyToFile(context.Background(), cfg); err != nil {
+		var changed bool
+		lastDigest, changed, err = discoveryserver.FetchAndVerifyToFileIfChanged(context.Background(), cfg, lastDigest)
+		if err != nil {
 			log.Printf("bundle refresh failed: %v", err)
 			continue
 		}
-		log.Printf("bundle refreshed successfully")
+		if changed {
+			log.Printf("bundle refreshed successfully; digest=%s", lastDigest)
+			continue
+		}
+		log.Printf("bundle unchanged; digest=%s", lastDigest)
 	}
 }
