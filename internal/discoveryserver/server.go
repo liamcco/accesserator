@@ -40,51 +40,60 @@ type Config struct {
 }
 
 func FetchAndVerifyToFile(ctx context.Context, cfg Config) error {
-	_, _, err := FetchAndVerifyToFileIfChanged(ctx, cfg, "")
+	_, _, _, err := FetchAndVerifyToFileIfChanged(ctx, cfg, "", "")
 	return err
 }
 
-func FetchAndVerifyToFileIfChanged(ctx context.Context, cfg Config, lastRemoteDigest string) (string, bool, error) {
+func FetchAndVerifyToFileIfChanged(
+	ctx context.Context,
+	cfg Config,
+	lastRemoteDigest string,
+	lastLocalChecksum string,
+) (string, string, bool, error) {
 	if err := validateConfig(cfg); err != nil {
-		return lastRemoteDigest, false, err
+		return lastRemoteDigest, lastLocalChecksum, false, err
 	}
 
 	token, err := readOptionalTrimmedFile(cfg.GithubTokenFile)
 	if err != nil {
-		return lastRemoteDigest, false, fmt.Errorf("read github token: %w", err)
+		return lastRemoteDigest, lastLocalChecksum, false, fmt.Errorf("read github token: %w", err)
 	}
 
 	remoteDigest, err := fetchOCIBundleRemoteDigest(ctx, cfg.BundleRef, token)
 	if err != nil {
-		return lastRemoteDigest, false, err
+		return lastRemoteDigest, lastLocalChecksum, false, err
 	}
-	if remoteDigest == lastRemoteDigest && fileExists(cfg.OutputFile) {
-		return remoteDigest, false, nil
+	if remoteDigest == lastRemoteDigest {
+		localChecksum, checksumErr := sha256FileHex(cfg.OutputFile)
+		if checksumErr == nil && localChecksum == lastLocalChecksum && localChecksum != "" {
+			return remoteDigest, localChecksum, false, nil
+		}
 	}
 
 	publicKeyPEM, err := os.ReadFile(cfg.PublicKeyFile)
 	if err != nil {
-		return lastRemoteDigest, false, fmt.Errorf("read public key: %w", err)
+		return lastRemoteDigest, lastLocalChecksum, false, fmt.Errorf("read public key: %w", err)
 	}
 
 	mirroredBundle, err := fetchOCIBundleArchive(ctx, cfg.BundleRef, token)
 	if err != nil {
-		return lastRemoteDigest, false, err
+		return lastRemoteDigest, lastLocalChecksum, false, err
 	}
 	if err := verifyBundleArchiveSignature(mirroredBundle, publicKeyPEM, cfg.ExpectedKeyID); err != nil {
-		return lastRemoteDigest, false, err
+		return lastRemoteDigest, lastLocalChecksum, false, err
 	}
 
 	unsignedBundle, err := stripBundleSignatureFile(mirroredBundle)
 	if err != nil {
-		return lastRemoteDigest, false, err
+		return lastRemoteDigest, lastLocalChecksum, false, err
 	}
+	localChecksum := sha256Hex(unsignedBundle)
 
 	if err := writeFileAtomically(cfg.OutputFile, unsignedBundle, 0o644); err != nil {
-		return lastRemoteDigest, false, err
+		return lastRemoteDigest, lastLocalChecksum, false, err
 	}
 
-	return remoteDigest, true, nil
+	return remoteDigest, localChecksum, true, nil
 }
 
 func validateConfig(cfg Config) error {
@@ -124,11 +133,6 @@ func writeFileAtomically(outputPath string, content []byte, mode os.FileMode) er
 		return fmt.Errorf("move bundle file into place: %w", err)
 	}
 	return nil
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func stripBundleSignatureFile(bundleArchive []byte) ([]byte, error) {
@@ -354,6 +358,19 @@ func verifyRS256(signingInput, signature, publicKeyPEM []byte) error {
 		return fmt.Errorf("verify bundle signature: %w", err)
 	}
 	return nil
+}
+
+func sha256Hex(content []byte) string {
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:])
+}
+
+func sha256FileHex(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return sha256Hex(content), nil
 }
 
 func parseRSAPublicKey(publicKeyPEM []byte) (*rsa.PublicKey, error) {

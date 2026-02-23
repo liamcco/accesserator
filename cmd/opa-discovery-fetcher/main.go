@@ -34,7 +34,12 @@ func main() {
 		OutputFile:      outputFile,
 	}
 
-	lastDigest, changed, err := discoveryserver.FetchAndVerifyToFileIfChanged(context.Background(), cfg, "")
+	lastDigest, lastLocalChecksum, changed, err := discoveryserver.FetchAndVerifyToFileIfChanged(
+		context.Background(),
+		cfg,
+		"",
+		"",
+	)
 	if err != nil {
 		log.Printf("failed to fetch and verify bundle: %v", err)
 		os.Exit(1)
@@ -51,7 +56,12 @@ func main() {
 	defer ticker.Stop()
 	for range ticker.C {
 		var changed bool
-		lastDigest, changed, err = discoveryserver.FetchAndVerifyToFileIfChanged(context.Background(), cfg, lastDigest)
+		lastDigest, lastLocalChecksum, changed, err = discoveryserver.FetchAndVerifyToFileIfChanged(
+			context.Background(),
+			cfg,
+			lastDigest,
+			lastLocalChecksum,
+		)
 		if err != nil {
 			log.Printf("bundle refresh failed: %v", err)
 			continue
