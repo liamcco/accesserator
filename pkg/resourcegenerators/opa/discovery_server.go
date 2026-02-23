@@ -1,12 +1,6 @@
 package opa
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
-	"encoding/json"
-	"fmt"
-
 	"github.com/kartverket/accesserator/internal/state"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,16 +10,12 @@ import (
 )
 
 const (
-	opaDiscoveryContainerName = "opa-discovery"
-	opaDiscoveryContainerPort = int32(8080)
-	opaDiscoveryServicePort   = int32(80)
+	opaDiscoveryContainerName       = "opa-discovery"
+	opaDiscoveryContainerPort int32 = 8080
+	opaDiscoveryServicePort   int32 = 80
 	// Keep the resource path stable to avoid requiring OPA sidecar restarts during migration.
 	opaDiscoveryPath = "/discovery.json"
 )
-
-type DiscoveryDocument struct {
-	Bundles map[string]Bundle `json:"bundles"`
-}
 
 func GetDiscoveryConfigDesired(objectMeta metav1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 	if !scope.OpaConfig.Enabled {
@@ -48,7 +38,7 @@ func GetDiscoveryConfigDesired(objectMeta metav1.ObjectMeta, scope state.Scope) 
 		},
 	}
 
-	discoveryBundle, err := createDiscoveryBundle(discoveryDocument)
+	discoveryBundle, err := buildDiscoveryBundleArchive(discoveryDocument)
 	if err != nil {
 		return nil
 	}
@@ -56,61 +46,12 @@ func GetDiscoveryConfigDesired(objectMeta metav1.ObjectMeta, scope state.Scope) 
 	return &corev1.ConfigMap{
 		ObjectMeta: objectMeta,
 		Data: map[string]string{
-			utilities.OpaDiscoveryNginxConfFileName: fmt.Sprintf(`server {
-  listen %d;
-  server_name _;
-
-  location = %s {
-    alias /etc/nginx/conf.d/%s;
-    default_type application/gzip;
-    add_header Cache-Control "no-store";
-  }
-}
-`, opaDiscoveryContainerPort, opaDiscoveryPath, utilities.OpaDiscoveryBundleFileName),
+			utilities.OpaDiscoveryNginxConfFileName: renderDiscoveryNginxConf(),
 		},
 		BinaryData: map[string][]byte{
 			utilities.OpaDiscoveryBundleFileName: discoveryBundle,
 		},
 	}
-}
-
-func createDiscoveryBundle(discoveryDocument DiscoveryDocument) ([]byte, error) {
-	// Discovery expects an OPA bundle archive (tar.gz). The bundle data document
-	// contains dynamic bundle configuration that OPA merges into runtime config.
-	discoveryDataJSON, err := json.Marshal(discoveryDocument)
-	if err != nil {
-		return nil, err
-	}
-
-	var buffer bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buffer)
-	tarWriter := tar.NewWriter(gzipWriter)
-
-	if err := tarWriter.WriteHeader(&tar.Header{
-		Name: "data.json",
-		Mode: 0o644,
-		Size: int64(len(discoveryDataJSON)),
-	}); err != nil {
-		_ = tarWriter.Close()
-		_ = gzipWriter.Close()
-		return nil, err
-	}
-
-	if _, err := tarWriter.Write(discoveryDataJSON); err != nil {
-		_ = tarWriter.Close()
-		_ = gzipWriter.Close()
-		return nil, err
-	}
-
-	if err := tarWriter.Close(); err != nil {
-		_ = gzipWriter.Close()
-		return nil, err
-	}
-	if err := gzipWriter.Close(); err != nil {
-		return nil, err
-	}
-
-	return buffer.Bytes(), nil
 }
 
 func GetDiscoveryServiceDesired(objectMeta metav1.ObjectMeta, scope state.Scope) *corev1.Service {
