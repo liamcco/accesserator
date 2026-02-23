@@ -1,16 +1,10 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"strconv"
 	"time"
-
-	"github.com/kartverket/accesserator/internal/discoveryserver"
 )
 
 func main() {
@@ -43,98 +37,16 @@ func main() {
 		return
 	}
 
-	cfg := discoveryserver.Config{
-		BundleRef:       bundleRef,
-		GithubTokenFile: githubTokenFile,
-		PublicKeyFile:   publicKeyFile,
-		ExpectedKeyID:   expectedKeyID,
-		OutputFile:      outputFile,
-	}
-
-	_ = writeHeartbeat(heartbeatFile)
-	lastDigest, lastLocalChecksum, changed, err := discoveryserver.FetchAndVerifyToFileIfChanged(
-		context.Background(),
-		cfg,
-		"",
-		"",
-	)
-	if err != nil {
+	if err := runFetcher(fetcherRunConfig{
+		bundleRef:       bundleRef,
+		githubTokenFile: githubTokenFile,
+		publicKeyFile:   publicKeyFile,
+		expectedKeyID:   expectedKeyID,
+		outputFile:      outputFile,
+		refreshInterval: refreshInterval,
+		heartbeatFile:   heartbeatFile,
+	}); err != nil {
 		log.Printf("failed to fetch and verify bundle: %v", err)
 		os.Exit(1)
 	}
-	if changed {
-		log.Printf("bundle fetched and verified; digest=%s refresh interval=%s", lastDigest, refreshInterval)
-	}
-	_ = writeHeartbeat(heartbeatFile)
-
-	if refreshInterval <= 0 {
-		select {}
-	}
-
-	ticker := time.NewTicker(refreshInterval)
-	defer ticker.Stop()
-	for range ticker.C {
-		_ = writeHeartbeat(heartbeatFile)
-		var changed bool
-		lastDigest, lastLocalChecksum, changed, err = discoveryserver.FetchAndVerifyToFileIfChanged(
-			context.Background(),
-			cfg,
-			lastDigest,
-			lastLocalChecksum,
-		)
-		if err != nil {
-			log.Printf("bundle refresh failed: %v", err)
-			continue
-		}
-		if changed {
-			log.Printf("bundle refreshed successfully; digest=%s", lastDigest)
-			_ = writeHeartbeat(heartbeatFile)
-			continue
-		}
-		log.Printf("bundle unchanged; digest=%s", lastDigest)
-		_ = writeHeartbeat(heartbeatFile)
-	}
-}
-
-func writeHeartbeat(path string) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644)
-}
-
-func runHealthcheck(heartbeatPath string, maxAge time.Duration) error {
-	if heartbeatPath == "" {
-		return fmt.Errorf("missing healthcheck heartbeat file")
-	}
-	content, err := os.ReadFile(heartbeatPath)
-	if err != nil {
-		return err
-	}
-	sec, err := strconv.ParseInt(string(bytesTrimSpace(content)), 10, 64)
-	if err != nil {
-		return err
-	}
-	if maxAge > 0 {
-		lastBeat := time.Unix(sec, 0)
-		if time.Since(lastBeat) > maxAge {
-			return fmt.Errorf("heartbeat too old: %s", time.Since(lastBeat))
-		}
-	}
-	return nil
-}
-
-func bytesTrimSpace(b []byte) []byte {
-	i := 0
-	j := len(b)
-	for i < j && (b[i] == ' ' || b[i] == '\n' || b[i] == '\r' || b[i] == '\t') {
-		i++
-	}
-	for j > i && (b[j-1] == ' ' || b[j-1] == '\n' || b[j-1] == '\r' || b[j-1] == '\t') {
-		j--
-	}
-	return b[i:j]
 }
