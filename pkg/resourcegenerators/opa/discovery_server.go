@@ -151,6 +151,25 @@ func GetDiscoveryDeploymentDesired(objectMeta metav1.ObjectMeta, scope state.Sco
 									ReadOnly:  true,
 								},
 							},
+							StartupProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: GetOpaDiscoveryBundleResourcePath(),
+										Port: intstr.FromString("http"),
+									},
+								},
+								PeriodSeconds:    2,
+								FailureThreshold: 30,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: GetOpaDiscoveryBundleResourcePath(),
+										Port: intstr.FromString("http"),
+									},
+								},
+								PeriodSeconds: 5,
+							},
 						},
 						{
 							Name:            opaDiscoveryFetcherContainerName,
