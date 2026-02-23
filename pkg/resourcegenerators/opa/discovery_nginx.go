@@ -12,10 +12,23 @@ func renderDiscoveryNginxConf() string {
   server_name _;
 
   location = %s {
-    alias /etc/nginx/conf.d/%s;
+    alias %s/%s;
+    default_type application/gzip;
+    add_header Cache-Control "no-store";
+  }
+
+  location = %s {
+    alias %s;
     default_type application/gzip;
     add_header Cache-Control "no-store";
   }
 }
-`, opaDiscoveryContainerPort, opaDiscoveryPath, utilities.OpaDiscoveryBundleFileName)
+`,
+		opaDiscoveryContainerPort,
+		opaDiscoveryPath,
+		opaDiscoveryNginxConfigMountPath,
+		utilities.OpaDiscoveryBundleFileName,
+		GetOpaDiscoveryBundleResourcePath(),
+		getOpaDiscoveryMirroredBundleFilePath(),
+	)
 }
