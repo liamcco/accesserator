@@ -10,6 +10,9 @@ import (
 )
 
 func readOptionalTrimmedFile(path string) (string, error) {
+	// Mounted token files typically end with a newline; trimming avoids auth
+	// failures caused by passing that newline through to registry auth.
+	// Example: file contents "ghp_abc123\n" become "ghp_abc123".
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -18,6 +21,10 @@ func readOptionalTrimmedFile(path string) (string, error) {
 }
 
 func writeFileAtomically(outputPath string, content []byte, mode os.FileMode) error {
+	// nginx may read the mirrored bundle while the fetcher refreshes it. Writing
+	// to a temp file and renaming avoids exposing a partially written archive.
+	// Example: write `/cache/authz.tar.gz.tmp`, then rename to
+	// `/cache/authz.tar.gz` once the full file is on disk.
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
@@ -34,11 +41,15 @@ func writeFileAtomically(outputPath string, content []byte, mode os.FileMode) er
 }
 
 func sha256Hex(content []byte) string {
+	// Stored alongside the last remote digest so the refresh loop can detect
+	// local corruption even when upstream content has not changed.
 	sum := sha256.Sum256(content)
 	return hex.EncodeToString(sum[:])
 }
 
 func sha256FileHex(path string) (string, error) {
+	// Example: if `/cache/authz.tar.gz` changes on disk, this digest changes even
+	// when the remote OCI digest is unchanged, allowing local-corruption repair.
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return "", err

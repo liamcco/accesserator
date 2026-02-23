@@ -12,6 +12,10 @@ import (
 )
 
 func fetchOCIBundleArchive(ctx context.Context, bundleRef, githubToken string) ([]byte, error) {
+	// This fetches the actual compressed bundle bytes from the OCI artifact layer.
+	// It is only called when the refresh path decides a rewrite is needed.
+	// Example: for `ghcr.io/acme/opa-bundle:v1`, this returns the tar.gz layer
+	// bytes that OPA would normally download as the bundle payload.
 	ref, err := name.ParseReference(bundleRef)
 	if err != nil {
 		return nil, fmt.Errorf("parse bundle ref: %w", err)
@@ -42,6 +46,10 @@ func fetchOCIBundleArchive(ctx context.Context, bundleRef, githubToken string) (
 }
 
 func fetchOCIBundleRemoteDigest(ctx context.Context, bundleRef, githubToken string) (string, error) {
+	// Cheap change detection: reading the descriptor/manifest digest avoids
+	// downloading the bundle layer on every refresh tick.
+	// Example: returns `sha256:7f...` for `ghcr.io/acme/opa-bundle:latest`; if the
+	// tag still points to the same manifest on the next tick, we skip layer pull.
 	ref, err := name.ParseReference(bundleRef)
 	if err != nil {
 		return "", fmt.Errorf("parse bundle ref: %w", err)
@@ -55,8 +63,12 @@ func fetchOCIBundleRemoteDigest(ctx context.Context, bundleRef, githubToken stri
 }
 
 func remoteOptions(ctx context.Context, githubToken string) []remote.Option {
+	// Example:
+	// - token present   -> basic auth (`oauth2` + PAT) for private GHCR bundle
+	// - token absent    -> anonymous pulls for public bundle refs
 	options := []remote.Option{remote.WithContext(ctx)}
 	if githubToken != "" {
+		// GHCR PATs are commonly authenticated via basic auth (PAT as password).
 		return append(options, remote.WithAuth(&authn.Basic{
 			Username: "oauth2",
 			Password: githubToken,
@@ -66,6 +78,10 @@ func remoteOptions(ctx context.Context, githubToken string) []remote.Option {
 }
 
 func selectBundleLayer(img v1.Image) (v1.Layer, error) {
+	// Current bundles are single-layer OCI artifacts. We use the last layer to be
+	// tolerant if metadata layers are added ahead of the payload.
+	// Example: image layers [config-metadata, bundle.tar.gz] -> choose the last
+	// layer so the fetcher reads the actual bundle payload.
 	layers, err := img.Layers()
 	if err != nil {
 		return nil, fmt.Errorf("list bundle layers: %w", err)

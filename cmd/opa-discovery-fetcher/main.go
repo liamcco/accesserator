@@ -8,6 +8,16 @@ import (
 )
 
 func main() {
+	// Example normal mode invocation (sidecar):
+	// /opa-discovery-fetcher \
+	//   -bundle-ref=ghcr.io/acme/opa-bundle:latest \
+	//   -github-token-file=/var/run/accesserator/opa-secret/github-token \
+	//   -public-key-file=/var/run/accesserator/opa-public-key/public_sign_key \
+	//   -output-file=/usr/share/nginx/html/bundles/authz.tar.gz \
+	//   -refresh-interval=1m
+	//
+	// Example probe mode invocation (exec livenessProbe):
+	// /opa-discovery-fetcher -healthcheck-heartbeat-file=/tmp/fetcher.heartbeat -healthcheck-max-age=3m
 	var bundleRef string
 	var githubTokenFile string
 	var publicKeyFile string
@@ -30,6 +40,9 @@ func main() {
 	flag.Parse()
 
 	if healthcheckHeartbeatFile != "" {
+		// The same binary is used both as the long-running fetcher sidecar and as
+		// the Kubernetes exec liveness probe command. Supplying the probe flag
+		// switches to a short-lived "check and exit" mode.
 		if err := runHealthcheck(healthcheckHeartbeatFile, healthcheckMaxAge); err != nil {
 			log.Printf("healthcheck failed: %v", err)
 			os.Exit(1)
@@ -37,6 +50,8 @@ func main() {
 		return
 	}
 
+	// Normal mode: start the refresh loop that fetches, verifies, and rewrites
+	// the mirrored bundle for nginx to serve.
 	if err := runFetcher(fetcherRunConfig{
 		bundleRef:       bundleRef,
 		githubTokenFile: githubTokenFile,
