@@ -16,7 +16,7 @@ type OPAConfig struct {
 	DecisionLogs DecisionLogs                 `yaml:"decision_logs"`
 	Services     map[string]Service           `yaml:"services"`
 	Discovery    Discovery                    `yaml:"discovery"`
-	Keys         map[string]Key               `yaml:"keys"`
+	Keys         map[string]Key               `yaml:"keys,omitempty"`
 }
 
 type EnvoyExtAuthzGrpc struct {
@@ -47,7 +47,6 @@ type Bundle struct {
 	Service  string  `yaml:"service" json:"service"`
 	Resource string  `yaml:"resource" json:"resource"`
 	Polling  Polling `yaml:"polling" json:"polling"`
-	Signing  Signing `yaml:"signing" json:"signing"`
 }
 
 type Discovery struct {
@@ -59,10 +58,6 @@ type Discovery struct {
 type Polling struct {
 	MinDelaySeconds int `yaml:"min_delay_seconds" json:"min_delay_seconds"`
 	MaxDelaySeconds int `yaml:"max_delay_seconds" json:"max_delay_seconds"`
-}
-
-type Signing struct {
-	KeyID string `yaml:"keyid" json:"keyid"`
 }
 
 type Key struct {
@@ -85,9 +80,6 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		return nil
 	}
 
-	githubTokenVar := QuotedString("${" + utilities.OpaGithubTokenEnvVar + "}")
-	publicKeyVar := QuotedString("${" + utilities.OpaPublicKeyEnvVar + "}")
-
 	cfg := OPAConfig{
 		Plugins: map[string]EnvoyExtAuthzGrpc{
 			"envoy_ext_authz_grpc": {
@@ -97,16 +89,6 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		},
 		DecisionLogs: DecisionLogs{Console: true},
 		Services: map[string]Service{
-			"ghcr-registry": {
-				URL:  "https://ghcr.io",
-				Type: "oci",
-				Credentials: &Credentials{
-					Bearer: Bearer{
-						Scheme: "Bearer",
-						Token:  githubTokenVar,
-					},
-				},
-			},
 			"discovery-server": {
 				URL: "http://" + utilities.GetOpaDiscoveryServiceName(scope.SecurityConfig.Spec.ApplicationRef) + "." + scope.SecurityConfig.Namespace + ".svc.cluster.local",
 			},
@@ -117,12 +99,6 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 			Polling: Polling{
 				MinDelaySeconds: 10,
 				MaxDelaySeconds: 30,
-			},
-		},
-		Keys: map[string]Key{
-			"bundle-verification-key": {
-				Algorithm: "RS256",
-				Key:       publicKeyVar,
 			},
 		},
 	}
