@@ -29,6 +29,8 @@ const (
 	opaDiscoveryPublicKeyFile         = "public.pem"
 	opaDiscoveryMirroredBundleFile    = "authz.tar.gz"
 	opaDiscoveryBundleRefreshInterval = "1m"
+	opaDiscoveryFetcherHeartbeatFile  = ".fetcher-heartbeat"
+	opaDiscoveryFetcherLivenessMaxAge = "3m"
 )
 
 func GetDiscoveryConfigDesired(objectMeta metav1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
@@ -110,6 +112,7 @@ func GetDiscoveryDeploymentDesired(objectMeta metav1.ObjectMeta, scope state.Sco
 	tokenFilePath := fmt.Sprintf("%s/%s", opaDiscoverySecretMountPath, opaDiscoveryGithubTokenFile)
 	publicKeyFilePath := fmt.Sprintf("%s/%s", opaDiscoveryPublicKeyMountPath, opaDiscoveryPublicKeyFile)
 	mirroredBundleFilePath := getOpaDiscoveryMirroredBundleFilePath()
+	fetcherHeartbeatFilePath := getOpaDiscoveryFetcherHeartbeatFilePath()
 	fetcherImage := fmt.Sprintf("%s:%s", config.Get().AccesseratorImageName, config.Get().AccesseratorImageTag)
 
 	return &appsv1.Deployment{
@@ -170,6 +173,15 @@ func GetDiscoveryDeploymentDesired(objectMeta metav1.ObjectMeta, scope state.Sco
 								},
 								PeriodSeconds: 5,
 							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: GetOpaDiscoveryResourcePath(),
+										Port: intstr.FromString("http"),
+									},
+								},
+								PeriodSeconds: 10,
+							},
 						},
 						{
 							Name:            opaDiscoveryFetcherContainerName,
@@ -182,6 +194,7 @@ func GetDiscoveryDeploymentDesired(objectMeta metav1.ObjectMeta, scope state.Sco
 								"-public-key-file=" + publicKeyFilePath,
 								"-output-file=" + mirroredBundleFilePath,
 								"-refresh-interval=" + opaDiscoveryBundleRefreshInterval,
+								"-heartbeat-file=" + fetcherHeartbeatFilePath,
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
@@ -198,6 +211,18 @@ func GetDiscoveryDeploymentDesired(objectMeta metav1.ObjectMeta, scope state.Sco
 									Name:      "mirrored-bundle",
 									MountPath: opaDiscoveryBundleMountPath,
 								},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{
+											"/opa-discovery-fetcher",
+											"-healthcheck-heartbeat-file=" + fetcherHeartbeatFilePath,
+											"-healthcheck-max-age=" + opaDiscoveryFetcherLivenessMaxAge,
+										},
+									},
+								},
+								PeriodSeconds: 10,
 							},
 						},
 					},
@@ -275,4 +300,8 @@ func GetOpaDiscoveryBundleResourcePath() string {
 
 func getOpaDiscoveryMirroredBundleFilePath() string {
 	return fmt.Sprintf("%s/%s", opaDiscoveryBundleMountPath, opaDiscoveryMirroredBundleFile)
+}
+
+func getOpaDiscoveryFetcherHeartbeatFilePath() string {
+	return fmt.Sprintf("%s/%s", opaDiscoveryBundleMountPath, opaDiscoveryFetcherHeartbeatFile)
 }
