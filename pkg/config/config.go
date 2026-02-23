@@ -8,19 +8,20 @@ import (
 )
 
 type Config struct {
-	ClusterName           string `split_words:"true"`
-	TokenxName            string `split_words:"true" default:"tokendings"`
-	TokenxNamespace       string `split_words:"true"`
-	TexasImageName        string `split_words:"true" default:"ghcr.io/nais/texas"`
-	TexasImageTag         string `split_words:"true"`
-	TexasPort             int32  `split_words:"true" default:"3000"`
-	TexasUrlEnvVarName    string `split_words:"true" default:"TEXAS_URL"`
-	OpaImageName          string `split_words:"true" default:"openpolicyagent/opa"`
-	OpaImageTag           string `split_words:"true" default:"1.9.0-istio-5-static"`
-	OpaPort               int32  `split_words:"true" default:"8181"`
-	OpaUrlEnvVarName      string `split_words:"true" default:"OPA_URL"`
-	AccesseratorImageName string `split_words:"true" default:"accesserator"`
-	AccesseratorImageTag  string `split_words:"true" default:"latest"`
+	ClusterName                 string `split_words:"true"`
+	TokenxName                  string `split_words:"true" default:"tokendings"`
+	TokenxNamespace             string `split_words:"true"`
+	TexasImageName              string `split_words:"true" default:"ghcr.io/nais/texas"`
+	TexasImageTag               string `split_words:"true"`
+	TexasPort                   int32  `split_words:"true" default:"3000"`
+	TexasUrlEnvVarName          string `split_words:"true" default:"TEXAS_URL"`
+	OpaImageName                string `split_words:"true" default:"openpolicyagent/opa"`
+	OpaImageTag                 string `split_words:"true" default:"1.9.0-istio-5-static"`
+	OpaPort                     int32  `split_words:"true" default:"8181"`
+	OpaUrlEnvVarName            string `split_words:"true" default:"OPA_URL"`
+	AccesseratorImageName       string `split_words:"true" default:"accesserator"`
+	AccesseratorImageTag        string `split_words:"true" default:"latest"`
+	AccesseratorImagePullPolicy string `split_words:"true" default:"Never"`
 }
 
 var cfg Config

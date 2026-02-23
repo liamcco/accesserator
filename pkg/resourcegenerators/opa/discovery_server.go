@@ -186,7 +186,7 @@ func GetDiscoveryDeploymentDesired(objectMeta metav1.ObjectMeta, scope state.Sco
 						{
 							Name:            opaDiscoveryFetcherContainerName,
 							Image:           fetcherImage,
-							ImagePullPolicy: corev1.PullNever,
+							ImagePullPolicy: getOpaDiscoveryFetcherImagePullPolicy(),
 							Command:         []string{"/opa-discovery-fetcher"},
 							Args: []string{
 								"-bundle-ref=" + scope.OpaConfig.BundleUrl,
@@ -304,4 +304,14 @@ func getOpaDiscoveryMirroredBundleFilePath() string {
 
 func getOpaDiscoveryFetcherHeartbeatFilePath() string {
 	return fmt.Sprintf("%s/%s", opaDiscoveryBundleMountPath, opaDiscoveryFetcherHeartbeatFile)
+}
+
+func getOpaDiscoveryFetcherImagePullPolicy() corev1.PullPolicy {
+	policy := corev1.PullPolicy(config.Get().AccesseratorImagePullPolicy)
+	switch policy {
+	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+		return policy
+	default:
+		return corev1.PullNever
+	}
 }
