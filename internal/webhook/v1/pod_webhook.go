@@ -343,18 +343,6 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, 
 		},
 		Env: []corev1.EnvVar{
 			{
-				Name: utilities.OpaGithubTokenEnvVar,
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &securityConfig.Spec.Opa.GithubToken,
-				},
-			},
-			{
-				Name: utilities.OpaPublicKeyEnvVar,
-				ValueFrom: &corev1.EnvVarSource{
-					ConfigMapKeyRef: &securityConfig.Spec.Opa.BundlePublicKey,
-				},
-			},
-			{
 				Name:  OpaEnabledEnvVarName,
 				Value: "true",
 			},
