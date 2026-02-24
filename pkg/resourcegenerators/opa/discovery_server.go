@@ -18,7 +18,7 @@ const (
 	opaDiscoveryContainerPort        int32 = 8080
 	opaDiscoveryServicePort          int32 = 80
 	// Keep the resource path stable to avoid requiring OPA sidecar restarts during migration.
-	opaDiscoveryPath = "/discovery.json"
+	opaDiscoveryPath = "/discovery.tar.gz"
 	opaBundlePath    = "/bundles/authz.tar.gz"
 
 	opaDiscoveryNginxConfigMountPath  = "/etc/nginx/conf.d"
