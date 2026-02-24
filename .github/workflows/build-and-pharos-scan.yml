@@ -28,16 +28,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute branch image tag
+        id: branch-tag
+        shell: bash
+        run: |
+          branch_name="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          tag="$(echo "$branch_name" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
+
+          if [ -z "$tag" ]; then
+            echo "Unable to derive a Docker tag from branch name: $branch_name" >&2
+            exit 1
+          fi
+
+          echo "branch_name=$branch_name" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Always tag with the git SHA
-            type=sha,format=long
-            # Also tag as :main only for pushes to the main branch
-            type=raw,value=main,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            # Always tag with the triggering branch name (sanitized for Docker tag format)
+            type=raw,value=${{ steps.branch-tag.outputs.tag }}
 
       - name: Build and push Docker image
         id: build-docker
