@@ -1,0 +1,83 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: opa
+spec:
+  skip: false
+  concurrent: true
+  skipDelete: false
+  namespaceTemplate:
+    metadata:
+      name: chainsaw-opa
+      labels:
+        accesserator-webhooks: enabled
+  steps:
+    - try:
+        - create:
+            file: ../../common/skiperator-app.yaml
+        - create:
+            file: securityconfig.yaml
+        - create:
+            resource:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: opa-github-secret
+                namespace: chainsaw-opa
+              type: Opaque
+              stringData:
+                github_token: token
+                github_username: user
+        - create:
+            resource:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: opa-sign-config
+                namespace: chainsaw-opa
+              data:
+                public_sign_key: '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAniGOdkOrhuPw/+lmWcF2\nYWkdwjcoVeyUy8VBnBdjtR+cYZOWlkpzPYb0UUigXDGU79LPzPLo4syAOL5w0oWL\njc+jheM2Y+IkG/NUHTSai3QHO4TcwQxPli5M0jJd2abY2bye1jTbgh9MiZZrWPQS\nDQpwWe7flSOFwzn8yLdbUe3BQ4/UvHg1Jmr959faTG0nlM4UO3oArcvoBAVop0DF\nx7K8Nnomr57dBhN2p6qA0XCxmiSgLvYWyy0Lbo5wUmBfWRino1R8egpIpLoVGZG0\nIVi7Y1g9sb6rF1SkA/mm1dwuqRZ8FwVkP6tVVEA61jPeU8mtpfpRweCOyfVzTBId\nWwIDAQAB\n-----END PUBLIC KEY-----'
+        - patch:
+            resource:
+              apiVersion: accesserator.kartverket.no/v1alpha
+              kind: SecurityConfig
+              metadata:
+                name: security-config
+              spec:
+                tokenx:
+                  enabled: true
+                opa:
+                  enabled: true
+                  githubToken:
+                    name: "opa-github-secret"
+                    key: "github_token"
+                  bundlePublicKey:
+                    name: "opa-sign-config"
+                    key: "public_sign_key"
+                  bundlePath: "ghcr.io/kartverket/opa-bundle"
+                  bundleVersion: "latest"
+        - script:
+            timeout: 90s
+            content: |
+              until kubectl get deployment app -n chainsaw-opa 2>/dev/null; do sleep 1; done
+              kubectl rollout status deployment/app -n chainsaw-opa --timeout=60s
+              kubectl wait --for=condition=Ready pod -l app=app -n chainsaw-opa --timeout=60s
+        - script:
+            content: |
+              kubectl exec -n chainsaw-opa -c app deploy/app -- sh -c 'printenv OPA_URL >/dev/null && echo "OPA_URL is set" && exit 1 || echo "OPA_URL is NOT set" && exit 0'
+        - patch:
+            resource:
+              apiVersion: skiperator.kartverket.no/v1alpha1
+              kind: Application
+              metadata:
+                name: app
+                labels:
+                  skiperator/security: "enabled"
+        - script:
+            timeout: 60s
+            content: |
+              kubectl rollout restart -n chainsaw-opa deployment/app
+              kubectl rollout status -n chainsaw-opa deployment/app --timeout=60s
+        - script:
+            content: |
+              kubectl exec -n chainsaw-opa -c app deploy/app -- sh -c 'printenv OPA_URL >/dev/null && echo "OPA_URL is set" && exit 0 || echo "OPA_URL is NOT set" && exit 1'
