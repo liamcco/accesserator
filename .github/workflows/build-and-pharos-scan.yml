@@ -2,10 +2,21 @@ name: Build accesserator
 
 on:
   pull_request:
+    paths:
+      # Match Docker build-relevant source inputs (see .dockerignore)
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '!**/*_test.go'
   push:
     branches:
-      - main
       - integrate-opa
+    paths:
+      # Match Docker build-relevant source inputs (see .dockerignore)
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '!**/*_test.go'
 
 env:
   REGISTRY: ghcr.io
