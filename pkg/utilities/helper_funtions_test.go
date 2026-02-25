@@ -41,6 +41,12 @@ func TestGetJwkerSecretName(t *testing.T) {
 	assert.Equal(t, want, GetJwkerSecretName(jwkerName))
 }
 
+func TestGetOpaBundleName(t *testing.T) {
+	appRef := "my-app"
+	want := fmt.Sprintf("%s-%s", appRef, OpaBundleNameSuffix)
+	assert.Equal(t, want, GetOpaBundleName(appRef))
+}
+
 func TestGetTokenxEgressName(t *testing.T) {
 	secName := "sec"
 	tokenx := "tok"
