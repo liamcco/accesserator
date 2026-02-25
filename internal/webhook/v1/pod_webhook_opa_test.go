@@ -151,7 +151,9 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 			Expect(getTexasErr).ToNot(HaveOccurred())
 			opaContainer, getOpaErr := getOpaContainer(securityConfig)
 			opaVolume, getOpaVolumeErr := getOpaConfigVolume(securityConfig)
+			opaBundleVolume, getOpaBundleVolumeErr := getOpaBundleVolume(securityConfig)
 			Expect(getOpaVolumeErr).ToNot(HaveOccurred())
+			Expect(getOpaBundleVolumeErr).ToNot(HaveOccurred())
 			Expect(getOpaErr).ToNot(HaveOccurred())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*cfg).To(Equal(
@@ -162,6 +164,7 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 					TexasContainer:  *texasContainer,
 					OpaContainer:    *opaContainer,
 					OpaConfigVolume: *opaVolume,
+					OpaBundleVolume: *opaBundleVolume,
 				},
 			))
 		})
