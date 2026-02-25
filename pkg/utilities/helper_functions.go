@@ -46,6 +46,10 @@ func GetOpaConfigName(applicationRef string) string {
 	}
 }
 
+func GetOpaBundleName(applicationRef string) string {
+	return fmt.Sprintf("%s-%s", applicationRef, OpaBundleNameSuffix)
+}
+
 func GetJwkerSecretName(jwkerName string) string {
 	return fmt.Sprintf("%s-%s", jwkerName, JwkerSecretNameSuffix)
 }
