@@ -24,6 +24,14 @@ rules:
   - create
   - patch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - accesserator.kartverket.no
   resources:
   - securityconfigs
