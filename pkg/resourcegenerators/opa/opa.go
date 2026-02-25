@@ -2,6 +2,7 @@ package opa
 
 import (
 	_ "embed"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -16,7 +17,7 @@ type OPAConfig struct {
 	DecisionLogs DecisionLogs                 `yaml:"decision_logs"`
 	Services     map[string]Service           `yaml:"services"`
 	Discovery    Discovery                    `yaml:"discovery"`
-	Keys         map[string]Key               `yaml:"keys,omitempty"`
+	Keys         map[string]Key               `yaml:"keys"`
 }
 
 type EnvoyExtAuthzGrpc struct {
@@ -29,9 +30,9 @@ type DecisionLogs struct {
 }
 
 type Service struct {
-	URL         string       `yaml:"url"`
-	Type        string       `yaml:"type,omitempty"`
-	Credentials *Credentials `yaml:"credentials,omitempty"`
+	URL         string      `yaml:"url"`
+	Type        string      `yaml:"type"`
+	Credentials Credentials `yaml:"credentials"`
 }
 
 type Credentials struct {
@@ -47,6 +48,7 @@ type Bundle struct {
 	Service  string  `yaml:"service" json:"service"`
 	Resource string  `yaml:"resource" json:"resource"`
 	Polling  Polling `yaml:"polling" json:"polling"`
+	Signing  Signing `yaml:"signing" json:"signing"`
 }
 
 type Discovery struct {
@@ -60,10 +62,19 @@ type Polling struct {
 	MaxDelaySeconds int `yaml:"max_delay_seconds" json:"max_delay_seconds"`
 }
 
+type Signing struct {
+	KeyID string `yaml:"keyid" json:"keyid"`
+}
+
 type Key struct {
 	Algorithm string       `yaml:"algorithm"`
 	Key       QuotedString `yaml:"key"`
 }
+
+const (
+	opaOCIRegistryServiceName = "oci-registry"
+	opaBundleSigningKeyID     = "bundle-signing"
+)
 
 type QuotedString string
 
@@ -80,6 +91,9 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		return nil
 	}
 
+	githubTokenVar := QuotedString("${" + utilities.OpaGithubTokenEnvVar + "}")
+	publicKeyVar := QuotedString("${" + utilities.OpaPublicKeyEnvVar + "}")
+
 	cfg := OPAConfig{
 		Plugins: map[string]EnvoyExtAuthzGrpc{
 			"envoy_ext_authz_grpc": {
@@ -92,6 +106,16 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 			"discovery-server": {
 				URL: "http://" + utilities.GetOpaDiscoveryServiceName(scope.SecurityConfig.Spec.ApplicationRef) + "." + scope.SecurityConfig.Namespace + ".svc.cluster.local",
 			},
+			opaOCIRegistryServiceName: {
+				URL:  getOCIServiceURL(scope.OpaConfig.BundleUrl),
+				Type: "oci",
+				Credentials: Credentials{
+					Bearer: Bearer{
+						Scheme: "Bearer",
+						Token:  githubTokenVar,
+					},
+				},
+			},
 		},
 		Discovery: Discovery{
 			Service:  "discovery-server",
@@ -99,6 +123,12 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 			Polling: Polling{
 				MinDelaySeconds: 10,
 				MaxDelaySeconds: 30,
+			},
+		},
+		Keys: map[string]Key{
+			opaBundleSigningKeyID: {
+				Algorithm: "RS256",
+				Key:       publicKeyVar,
 			},
 		},
 	}
@@ -116,4 +146,17 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 	}
 
 	return configMap
+}
+
+func getOCIServiceURL(bundleRef string) string {
+	parts := strings.SplitN(bundleRef, "/", 2)
+	if len(parts) < 2 || parts[0] == "" {
+		return "https://ghcr.io"
+	}
+	host := strings.TrimPrefix(parts[0], "https://")
+	host = strings.TrimPrefix(host, "http://")
+	if host == "" {
+		return "https://ghcr.io"
+	}
+	return "https://" + host
 }

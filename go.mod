@@ -5,7 +5,6 @@ go 1.25.5
 require (
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
-	github.com/google/go-containerregistry v0.20.6
 	github.com/kartverket/skiperator v1.1.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/nais/liberator v0.0.0-20260113112700-26b7bdc3bc16
@@ -19,7 +18,6 @@ require (
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
 	sigs.k8s.io/controller-runtime v0.22.4
-	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -90,6 +88,7 @@ require (
 	github.com/google/cel-go v0.26.0 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/go-containerregistry v0.20.6 // indirect
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20221019221123-02f47e132cf5 // indirect
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20221017135236-9b4fdd506cdd // indirect
 	github.com/google/k8s-digester v0.1.10 // indirect
@@ -167,4 +166,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.15.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )

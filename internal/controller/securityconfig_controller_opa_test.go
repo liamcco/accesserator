@@ -7,7 +7,6 @@ import (
 	"context"
 	"io"
 
-	"github.com/kartverket/accesserator/pkg/resourcegenerators/opa"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -76,7 +75,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 							Enabled:         true,
 							GithubToken:     corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "opa-github-secret"}, Key: "github_token"},
 							BundlePublicKey: corev1.ConfigMapKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "opa-sign-config"}, Key: "public_sign_key"},
-							BundlePath:      "ghcr.io/kartverket/taaask-poc",
+							BundlePath:      "ghcr.io/kartverket/opa-bundle",
 							BundleVersion:   "latest",
 						},
 					},
@@ -379,7 +378,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 				Namespace: namespaceName,
 			}
 
-			By("Verifying the discovery document points to the internal bundle endpoint")
+			By("Verifying the discovery document points to the configured OCI bundle reference")
 			var opaDiscoveryConfig corev1.ConfigMap
 			Eventually(func() error {
 				return k8sClient.Get(ctx, opaDiscoveryConfigKey, &opaDiscoveryConfig)
@@ -389,7 +388,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 			)
 			Expect(initialDiscoveryErr).NotTo(HaveOccurred())
 			Expect(initialDiscoveryData).To(
-				ContainSubstring(opa.GetOpaDiscoveryBundleResourcePath()),
+				ContainSubstring("ghcr.io/kartverket/opa-bundle:latest"),
 			)
 
 			By("Updating bundle version in SecurityConfig")
@@ -404,26 +403,18 @@ var _ = Describe("SecurityConfig Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Verifying the discovery deployment picks up the updated bundle reference")
-			opaDiscoveryDeploymentKey := types.NamespacedName{
-				Name:      utilities.GetOpaDiscoveryDeploymentName(skiperatorAppName),
-				Namespace: namespaceName,
-			}
-			Eventually(func() []string {
-				updatedDeployment := &appsv1.Deployment{}
-				if getErr := k8sClient.Get(ctx, opaDiscoveryDeploymentKey, updatedDeployment); getErr != nil {
-					return nil
+			By("Verifying the discovery document picks up the updated bundle reference")
+			Eventually(func() string {
+				updatedConfig := &corev1.ConfigMap{}
+				if getErr := k8sClient.Get(ctx, opaDiscoveryConfigKey, updatedConfig); getErr != nil {
+					return ""
 				}
-				for _, c := range updatedDeployment.Spec.Template.Spec.Containers {
-					if c.Name == "opa-discovery-bundle-fetcher" {
-						return c.Args
-					}
+				data, extractErr := extractDiscoveryDataJSON(updatedConfig.BinaryData[utilities.OpaDiscoveryBundleFileName])
+				if extractErr != nil {
+					return ""
 				}
-				if len(updatedDeployment.Spec.Template.Spec.Containers) == 0 {
-					return nil
-				}
-				return nil
-			}).Should(ContainElement("-bundle-ref=ghcr.io/kartverket/taaask-poc:v2.0.0"))
+				return data
+			}).Should(ContainSubstring("ghcr.io/kartverket/opa-bundle:v2.0.0"))
 		})
 	})
 })
