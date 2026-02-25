@@ -12,11 +12,11 @@ import (
 )
 
 type OPAConfig struct {
-	Plugins      map[string]EnvoyExtAuthzGrpc `yaml:"plugins"`
-	DecisionLogs DecisionLogs                 `yaml:"decision_logs"`
-	Services     map[string]Service           `yaml:"services"`
-	Bundles      map[string]Bundle            `yaml:"bundles"`
-	Keys         map[string]Key               `yaml:"keys"`
+	Plugins      map[string]EnvoyExtAuthzGrpc `yaml:"plugins,omitempty"`
+	DecisionLogs DecisionLogs                 `yaml:"decision_logs,omitempty"`
+	Services     map[string]Service           `yaml:"services,omitempty"`
+	Bundles      map[string]Bundle            `yaml:"bundles,omitempty"`
+	Keys         map[string]Key               `yaml:"keys,omitempty"`
 }
 
 type EnvoyExtAuthzGrpc struct {
@@ -79,9 +79,6 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		return nil
 	}
 
-	githubTokenVar := QuotedString("${" + utilities.OpaGithubTokenEnvVar + "}")
-	publicKeyVar := QuotedString("${" + utilities.OpaPublicKeyEnvVar + "}")
-
 	cfg := OPAConfig{
 		Plugins: map[string]EnvoyExtAuthzGrpc{
 			"envoy_ext_authz_grpc": {
@@ -90,37 +87,6 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 			},
 		},
 		DecisionLogs: DecisionLogs{Console: true},
-		Services: map[string]Service{
-			"ghcr-registry": {
-				URL:  "https://ghcr.io",
-				Type: "oci",
-				Credentials: Credentials{
-					Bearer: Bearer{
-						Scheme: "Bearer",
-						Token:  githubTokenVar,
-					},
-				},
-			},
-		},
-		Bundles: map[string]Bundle{
-			"authz": {
-				Service:  "ghcr-registry",
-				Resource: scope.OpaConfig.BundleUrl,
-				Polling: Polling{
-					MinDelaySeconds: 10,
-					MaxDelaySeconds: 30,
-				},
-				Signing: Signing{
-					KeyID: "bundle-verification-key",
-				},
-			},
-		},
-		Keys: map[string]Key{
-			"bundle-verification-key": {
-				Algorithm: "RS256",
-				Key:       publicKeyVar,
-			},
-		},
 	}
 
 	configYAML, err := yaml.Marshal(cfg)
@@ -132,6 +98,21 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		ObjectMeta: objectMeta,
 		Data: map[string]string{
 			utilities.OpaConfigFileName: string(configYAML),
+		},
+	}
+
+	return configMap
+}
+
+func GetBundleDesired(objectMeta v1.ObjectMeta, scope state.Scope, bundle []byte) *corev1.ConfigMap {
+	if !scope.OpaConfig.Enabled {
+		return nil
+	}
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: objectMeta,
+		BinaryData: map[string][]byte{
+			utilities.OpaBundleFileName: bundle,
 		},
 	}
 
