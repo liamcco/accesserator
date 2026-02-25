@@ -164,6 +164,14 @@ func TestGetDiscoveryDeploymentDesiredWhenEnabledReturnsExpectedSpec(t *testing.
 	}
 }
 
+func TestRenderDiscoveryNginxConfEnablesConditionalBundleCaching(t *testing.T) {
+	conf := renderDiscoveryNginxConf()
+
+	assert.Contains(t, conf, "etag on;")
+	assert.Contains(t, conf, "if_modified_since exact;")
+	assert.Contains(t, conf, `location = `+GetOpaDiscoveryBundleResourcePath())
+}
+
 func extractDiscoveryDataJSONFromBundle(bundle []byte) (string, error) {
 	gzipReader, err := gzip.NewReader(bytes.NewReader(bundle))
 	if err != nil {

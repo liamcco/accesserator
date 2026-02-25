@@ -10,6 +10,10 @@ func renderDiscoveryNginxConf() string {
 	return fmt.Sprintf(`server {
   listen %d;
   server_name _;
+  # OPA bundle polling uses ETag/If-None-Match for efficient 304 responses.
+  # Make this explicit instead of relying on nginx defaults.
+  etag on;
+  if_modified_since exact;
 
   location = %s {
     alias %s/%s;
