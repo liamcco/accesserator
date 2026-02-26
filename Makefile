@@ -163,6 +163,7 @@ deploy: ensurelocal isnotrunning accesserator-namespace generate install kustomi
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy accesserator and all the resources deployed by accesserator to the kind cluster. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	"$(KUBECTL)" delete secret accesserator-env -n accesserator-system --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found)
 	@out="$$( "$(KUSTOMIZE)" build config/webhook 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --context $(KUBECONTEXT) --ignore-not-found=$(ignore-not-found) -f -; else echo "No Webhook configurations to delete; skipping."; fi
 	@out="$$( "$(KUSTOMIZE)" build config/manager 2>/dev/null || true )"; \
