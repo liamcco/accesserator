@@ -152,19 +152,22 @@ var _ = Describe("pod_webhook.go unit tests", func() {
 			opaContainer, getOpaErr := getOpaContainer(securityConfig)
 			opaVolume, getOpaVolumeErr := getOpaConfigVolume(securityConfig)
 			opaBundleVolume, getOpaBundleVolumeErr := getOpaBundleVolume(securityConfig)
+			opaPublicKeyVolume, getOpaPublicKeyVolumeErr := getOpaPublicKeyVolume(securityConfig)
 			Expect(getOpaVolumeErr).ToNot(HaveOccurred())
 			Expect(getOpaBundleVolumeErr).ToNot(HaveOccurred())
+			Expect(getOpaPublicKeyVolumeErr).ToNot(HaveOccurred())
 			Expect(getOpaErr).ToNot(HaveOccurred())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*cfg).To(Equal(
 				PodSecurityConfiguration{
-					SecurityConfig:  &securityConfig,
-					AppName:         skiperatorAppName,
-					SecurityEnabled: true,
-					TexasContainer:  *texasContainer,
-					OpaContainer:    *opaContainer,
-					OpaConfigVolume: *opaVolume,
-					OpaBundleVolume: *opaBundleVolume,
+					SecurityConfig:     &securityConfig,
+					AppName:            skiperatorAppName,
+					SecurityEnabled:    true,
+					TexasContainer:     *texasContainer,
+					OpaContainer:       *opaContainer,
+					OpaConfigVolume:    *opaVolume,
+					OpaBundleVolume:    *opaBundleVolume,
+					OpaPublicKeyVolume: *opaPublicKeyVolume,
 				},
 			))
 		})

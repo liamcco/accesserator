@@ -29,11 +29,12 @@ const (
 	TexasInitContainerName = "texas"
 	TexasPortName          = "http"
 
-	OpaInitContainerName = "opa"
-	OpaPortName          = "http"
-	OpaTmpVolumeName     = "opa-tmp"
-	OpaConfigMountPath   = "/config"
-	OpaBundleMountPath   = "/bundles"
+	OpaInitContainerName  = "opa"
+	OpaPortName           = "http"
+	OpaTmpVolumeName      = "opa-tmp"
+	OpaConfigMountPath    = "/config"
+	OpaBundleMountPath    = "/bundles"
+	OpaPublicKeyMountPath = "/public-key"
 
 	MaskinportenEnabledEnvVarName = "MASKINPORTEN_ENABLED"
 	AzureEnabledEnvVarName        = "AZURE_ENABLED"
@@ -108,6 +109,7 @@ func (d *PodCustomDefaulter) Default(ctx context.Context, obj runtime.Object) er
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, securityConfigForPod.OpaContainer)
 		pod.Spec.Volumes = append(pod.Spec.Volumes, securityConfigForPod.OpaConfigVolume)
 		pod.Spec.Volumes = append(pod.Spec.Volumes, securityConfigForPod.OpaBundleVolume)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, securityConfigForPod.OpaPublicKeyVolume)
 		ensureEmptyDirVolume(&pod.Spec, OpaTmpVolumeName)
 
 		podlog.Info("Injecting opa url")
@@ -158,13 +160,14 @@ func (v *PodCustomValidator) ValidateDelete(_ context.Context, obj runtime.Objec
 }
 
 type PodSecurityConfiguration struct {
-	SecurityConfig  *v1alpha.SecurityConfig
-	AppName         string
-	SecurityEnabled bool
-	TexasContainer  corev1.Container
-	OpaContainer    corev1.Container
-	OpaConfigVolume corev1.Volume
-	OpaBundleVolume corev1.Volume
+	SecurityConfig     *v1alpha.SecurityConfig
+	AppName            string
+	SecurityEnabled    bool
+	TexasContainer     corev1.Container
+	OpaContainer       corev1.Container
+	OpaConfigVolume    corev1.Volume
+	OpaBundleVolume    corev1.Volume
+	OpaPublicKeyVolume corev1.Volume
 }
 
 // getSecurityConfigForPod extracts the SecurityConfig for a given pod and determines if security is enabled.
@@ -257,15 +260,20 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct Opa bundle volume: %w", err)
 	}
+	opaPublicKeyVolume, err := getOpaPublicKeyVolume(*securityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Opa public key volume: %w", err)
+	}
 
 	return &PodSecurityConfiguration{
-		SecurityConfig:  securityConfig,
-		AppName:         appName,
-		SecurityEnabled: true,
-		TexasContainer:  *texasContainer,
-		OpaContainer:    *opaContainer,
-		OpaConfigVolume: *opaConfigVolume,
-		OpaBundleVolume: *opaBundleVolume,
+		SecurityConfig:     securityConfig,
+		AppName:            appName,
+		SecurityEnabled:    true,
+		TexasContainer:     *texasContainer,
+		OpaContainer:       *opaContainer,
+		OpaConfigVolume:    *opaConfigVolume,
+		OpaBundleVolume:    *opaBundleVolume,
+		OpaPublicKeyVolume: *opaPublicKeyVolume,
 	}, nil
 }
 
@@ -303,8 +311,10 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, 
 
 	expectedOpaConfigName := utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef)
 	expectedOpaBundleName := utilities.GetOpaBundleName(securityConfig.Spec.ApplicationRef)
+	expectedOpaPublicKeyName := utilities.GetOpaPublicKeyName(securityConfig.Spec.ApplicationRef)
 	opaConfigFilePath := OpaConfigMountPath + "/" + utilities.OpaConfigFileName
 	opaBundleFilePath := OpaBundleMountPath + "/" + utilities.OpaBundleFileName
+	opaPublicKeyFilePath := OpaPublicKeyMountPath + "/" + utilities.OpaPublicKeyFileName
 
 	return &corev1.Container{
 		Name:  OpaInitContainerName,
@@ -315,7 +325,7 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, 
 			"--config-file",
 			opaConfigFilePath,
 			"--verification-key",
-			"$(OPA_PUBLIC_KEY)",
+			opaPublicKeyFilePath,
 			"--verification-key-id",
 			"bundle-verification-key",
 			"--bundle",
@@ -360,6 +370,11 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, 
 				ReadOnly:  true,
 			},
 			{
+				Name:      expectedOpaPublicKeyName,
+				MountPath: OpaPublicKeyMountPath,
+				ReadOnly:  true,
+			},
+			{
 				Name:      OpaTmpVolumeName,
 				MountPath: "/tmp",
 			},
@@ -369,12 +384,6 @@ func getOpaContainer(securityConfig v1alpha.SecurityConfig) (*corev1.Container, 
 				Name: utilities.OpaGithubTokenEnvVar,
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &securityConfig.Spec.Opa.GithubToken,
-				},
-			},
-			{
-				Name: utilities.OpaPublicKeyEnvVar,
-				ValueFrom: &corev1.EnvVarSource{
-					ConfigMapKeyRef: &securityConfig.Spec.Opa.BundlePublicKey,
 				},
 			},
 			{
@@ -400,6 +409,27 @@ func getOpaBundleVolume(securityConfig v1alpha.SecurityConfig) (*corev1.Volume, 
 				},
 				Items: []corev1.KeyToPath{
 					{Key: utilities.OpaBundleFileName, Path: utilities.OpaBundleFileName},
+				},
+			},
+		},
+	}, nil
+}
+
+func getOpaPublicKeyVolume(securityConfig v1alpha.SecurityConfig) (*corev1.Volume, error) {
+	if securityConfig.Spec.Opa == nil || !securityConfig.Spec.Opa.Enabled {
+		return &corev1.Volume{}, nil
+	}
+
+	expectedOpaPublicKeyName := utilities.GetOpaPublicKeyName(securityConfig.Spec.ApplicationRef)
+	return &corev1.Volume{
+		Name: expectedOpaPublicKeyName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: securityConfig.Spec.Opa.BundlePublicKey.Name,
+				},
+				Items: []corev1.KeyToPath{
+					{Key: securityConfig.Spec.Opa.BundlePublicKey.Key, Path: utilities.OpaPublicKeyFileName},
 				},
 			},
 		},
