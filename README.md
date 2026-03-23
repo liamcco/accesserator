@@ -2,6 +2,9 @@
 
 Accesserator is a Kubernetes operator that introduces the `SecurityConfig` CRD and uses it to configure security capabilities and make them available for [Skiperator](https://github.com/kartverket/skiperator) applications.
 
+## What is in this fork?
+Read more [here](FORK.md)
+
 ## 🔍 What Accesserator does
 A `SecurityConfig` defines which security capabilities should be created and made available for a Skiperator application referenced by `applicationRef`. 
 Accesserator does this by injecting a sidecar container, called **texas** into the application pod that implements the desired security capabilities.
