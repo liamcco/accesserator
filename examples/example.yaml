@@ -30,11 +30,6 @@ spec:
             - name: https
               protocol: HTTPS
               port: 443
-        - host: objects.githubusercontent.com
-          ports:
-            - name: https
-              protocol: HTTPS
-              port: 443
       rules:
         - application: another-app
 ---
@@ -71,11 +66,6 @@ spec:
               protocol: HTTPS
               port: 443
         - host: pkg-containers.githubusercontent.com
-          ports:
-            - name: https
-              protocol: HTTPS
-              port: 443
-        - host: objects.githubusercontent.com
           ports:
             - name: https
               protocol: HTTPS
