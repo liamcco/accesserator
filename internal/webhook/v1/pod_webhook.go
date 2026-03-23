@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/kartverket/accesserator/api/v1alpha"
 	"github.com/kartverket/accesserator/pkg/config"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1"
+	"github.com/kartverket/skiperator/api/v1alpha1/podtypes"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -156,12 +159,13 @@ func (v *PodCustomValidator) ValidateDelete(_ context.Context, obj runtime.Objec
 }
 
 type PodSecurityConfiguration struct {
-	SecurityConfig  *v1alpha.SecurityConfig
-	AppName         string
-	SecurityEnabled bool
-	TexasContainer  corev1.Container
-	OpaContainer    corev1.Container
-	OpaConfigVolume corev1.Volume
+	SecurityConfig         *v1alpha.SecurityConfig
+	SkiperatorAccessPolicy *podtypes.AccessPolicy
+	AppName                string
+	SecurityEnabled        bool
+	TexasContainer         corev1.Container
+	OpaContainer           corev1.Container
+	OpaConfigVolume        corev1.Volume
 }
 
 // getSecurityConfigForPod extracts the SecurityConfig for a given pod and determines if security is enabled.
@@ -252,12 +256,13 @@ func getSecurityConfigForPod(ctx context.Context, crudClient client.Client, pod 
 	}
 
 	return &PodSecurityConfiguration{
-		SecurityConfig:  securityConfig,
-		AppName:         appName,
-		SecurityEnabled: true,
-		TexasContainer:  *texasContainer,
-		OpaContainer:    *opaContainer,
-		OpaConfigVolume: *opaConfigVolume,
+		SecurityConfig:         securityConfig,
+		SkiperatorAccessPolicy: skiperatorApplication.Spec.AccessPolicy,
+		AppName:                appName,
+		SecurityEnabled:        true,
+		TexasContainer:         *texasContainer,
+		OpaContainer:           *opaContainer,
+		OpaConfigVolume:        *opaConfigVolume,
 	}, nil
 }
 
@@ -567,7 +572,87 @@ func validateOpaCorrectlyConfigured(pod *corev1.Pod, securityConfigForPod *PodSe
 		podlog.Info(errMsg)
 		return fmt.Errorf("%s", errMsg)
 	}
+	if err := validateOpaOutboundExternalAccess(securityConfigForPod); err != nil {
+		podlog.Info("Opa is enabled but Application accessPolicy is missing required external egress", "error", err.Error())
+		return err
+	}
 	return nil
+}
+
+func validateOpaOutboundExternalAccess(securityConfigForPod *PodSecurityConfiguration) error {
+	if securityConfigForPod == nil || securityConfigForPod.SecurityConfig == nil || securityConfigForPod.SecurityConfig.Spec.Opa == nil || !securityConfigForPod.SecurityConfig.Spec.Opa.Enabled {
+		return nil
+	}
+	requiredHosts := requiredOpaExternalHosts(securityConfigForPod.SecurityConfig.Spec.Opa.BundlePath)
+	if len(requiredHosts) == 0 {
+		return nil
+	}
+
+	accessPolicy := securityConfigForPod.SkiperatorAccessPolicy
+	if accessPolicy == nil {
+		return fmt.Errorf("Opa is enabled but Application is missing accessPolicy.outbound.external entries for: %s", strings.Join(requiredHosts, ", "))
+	}
+
+	missing := make([]string, 0, len(requiredHosts))
+	for _, host := range requiredHosts {
+		if !hasAllowedExternalHost(accessPolicy.Outbound.External, host) {
+			missing = append(missing, host)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("Opa is enabled but Application accessPolicy.outbound.external is missing required host allowlist entries: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func requiredOpaExternalHosts(bundlePath string) []string {
+	registryHost := ociRegistryHost(bundlePath)
+	if registryHost == "" {
+		return nil
+	}
+
+	hosts := []string{registryHost}
+	if registryHost == "ghcr.io" {
+		hosts = append(hosts,
+			"pkg-containers.githubusercontent.com",
+			"objects.githubusercontent.com",
+		)
+	}
+	return hosts
+}
+
+func ociRegistryHost(bundlePath string) string {
+	bundlePath = strings.TrimSpace(bundlePath)
+	if bundlePath == "" {
+		return ""
+	}
+	// Expected format is "registry.example.com/org/repo[:tag]" or "@sha256:..."
+	// SecurityConfig currently stores the path separately from the version, so the
+	// first path segment is the registry host.
+	parts := strings.Split(bundlePath, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[0]
+}
+
+func hasAllowedExternalHost(rules []podtypes.ExternalRule, host string) bool {
+	for _, rule := range rules {
+		if strings.TrimSpace(rule.Host) != host {
+			continue
+		}
+		if len(rule.Ports) == 0 {
+			// Skiperator defaults to allow HTTP/HTTPS on 80/443 when ports are omitted.
+			return true
+		}
+		for _, p := range rule.Ports {
+			if p.Port == 443 && strings.EqualFold(p.Protocol, "HTTPS") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func isTexasContainerEqual(expected, actual corev1.Container) bool {
