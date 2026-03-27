@@ -467,4 +467,3 @@ ensurekubefwd: ensureflox ## Ensure kubefwd is installed and running
 		echo -e "      sudo kubefwd svc -n <namespace> --context $(KUBECONTEXT)"; \
 		exit 1; \
 	}
-

@@ -18,6 +18,7 @@ import (
 	"github.com/kartverket/accesserator/pkg/utilities"
 	"github.com/kartverket/skiperator/api/v1alpha1"
 	naisiov1 "github.com/nais/liberator/pkg/apis/nais.io/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -53,6 +54,8 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&naisiov1.Jwker{}).
 		Owns(&networkv1.NetworkPolicy{}).
 		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Service{}).
+		Owns(&appsv1.Deployment{}).
 		Watches(&v1alpha1.Application{}, eventhandler.HandleSkiperatorApplicationEvent(r.Client)).
 		Named("securityconfig").
 		Complete(r)
@@ -65,6 +68,8 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=skiperator.kartverket.no,resources=applications,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nais.io,resources=jwkers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -124,6 +129,26 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Name:      utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef),
 		Namespace: securityConfig.Namespace,
 	}
+	OpaDiscoveryConfigObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaDiscoveryConfigName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
+	OpaDiscoveryServiceObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaDiscoveryServiceName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
+	OpaDiscoveryDeploymentObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaDiscoveryDeploymentName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
+	OpaDiscoveryEgressObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaDiscoveryEgressPolicyName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
+	OpaDiscoveryIngressObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaDiscoveryIngressPolicyName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
 
 	controllerResources := []reconciliation.ControllerResource{
 		ControllerResourceAdapter[*naisiov1.Jwker]{
@@ -170,6 +195,96 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 					UpdateFields: func(current, desired *corev1.ConfigMap) {
 						current.Data = desired.Data
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*corev1.ConfigMap]{
+			reconciliation.ReconcilerAdapter[*corev1.ConfigMap]{
+				Func: reconciliation.ResourceReconciler[*corev1.ConfigMap]{
+					ResourceKind:    "ConfigMap",
+					ResourceName:    OpaDiscoveryConfigObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetDiscoveryConfigDesired(OpaDiscoveryConfigObjectMeta, *scope)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *corev1.ConfigMap) bool {
+						return !equality.Semantic.DeepEqual(current.Data, desired.Data) ||
+							!equality.Semantic.DeepEqual(current.BinaryData, desired.BinaryData)
+					},
+					UpdateFields: func(current, desired *corev1.ConfigMap) {
+						current.Data = desired.Data
+						current.BinaryData = desired.BinaryData
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*corev1.Service]{
+			reconciliation.ReconcilerAdapter[*corev1.Service]{
+				Func: reconciliation.ResourceReconciler[*corev1.Service]{
+					ResourceKind:    "Service",
+					ResourceName:    OpaDiscoveryServiceObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetDiscoveryServiceDesired(OpaDiscoveryServiceObjectMeta, *scope)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *corev1.Service) bool {
+						return !equality.Semantic.DeepEqual(current.Labels, desired.Labels) ||
+							!equality.Semantic.DeepEqual(current.Spec.Selector, desired.Spec.Selector) ||
+							!equality.Semantic.DeepEqual(current.Spec.Ports, desired.Spec.Ports) ||
+							current.Spec.Type != desired.Spec.Type
+					},
+					UpdateFields: func(current, desired *corev1.Service) {
+						current.Labels = desired.Labels
+						current.Spec.Selector = desired.Spec.Selector
+						current.Spec.Ports = desired.Spec.Ports
+						current.Spec.Type = desired.Spec.Type
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*appsv1.Deployment]{
+			reconciliation.ReconcilerAdapter[*appsv1.Deployment]{
+				Func: reconciliation.ResourceReconciler[*appsv1.Deployment]{
+					ResourceKind:    "Deployment",
+					ResourceName:    OpaDiscoveryDeploymentObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetDiscoveryDeploymentDesired(OpaDiscoveryDeploymentObjectMeta, *scope)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *appsv1.Deployment) bool {
+						return !equality.Semantic.DeepEqual(current.Labels, desired.Labels) ||
+							!equality.Semantic.DeepEqual(current.Spec, desired.Spec)
+					},
+					UpdateFields: func(current, desired *appsv1.Deployment) {
+						current.Labels = desired.Labels
+						current.Spec = desired.Spec
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*networkv1.NetworkPolicy]{
+			reconciliation.ReconcilerAdapter[*networkv1.NetworkPolicy]{
+				Func: reconciliation.ResourceReconciler[*networkv1.NetworkPolicy]{
+					ResourceKind:    "NetworkPolicy",
+					ResourceName:    OpaDiscoveryEgressObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetDiscoveryEgressNetworkPolicyDesired(OpaDiscoveryEgressObjectMeta, *scope)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *networkv1.NetworkPolicy) bool {
+						return !equality.Semantic.DeepEqual(current.Spec, desired.Spec)
+					},
+					UpdateFields: func(current, desired *networkv1.NetworkPolicy) {
+						current.Spec = desired.Spec
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*networkv1.NetworkPolicy]{
+			reconciliation.ReconcilerAdapter[*networkv1.NetworkPolicy]{
+				Func: reconciliation.ResourceReconciler[*networkv1.NetworkPolicy]{
+					ResourceKind:    "NetworkPolicy",
+					ResourceName:    OpaDiscoveryIngressObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetDiscoveryIngressNetworkPolicyDesired(OpaDiscoveryIngressObjectMeta, *scope)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *networkv1.NetworkPolicy) bool {
+						return !equality.Semantic.DeepEqual(current.Spec, desired.Spec)
+					},
+					UpdateFields: func(current, desired *networkv1.NetworkPolicy) {
+						current.Spec = desired.Spec
 					},
 				},
 			},

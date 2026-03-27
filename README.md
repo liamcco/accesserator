@@ -99,7 +99,12 @@ test_deny_user {
 
 ### Miljøvariabler og secrets
 
-OPA-serveren må konfigureres med en public key til den signerte bundlen for å kunne verifisere avsender. Den må også ha en public access key fra en GitHub-bruker med nødvendige rettigheter til repoet sidecaren er koblet mot.
+OPA-serveren må konfigureres med en public key til den signerte bundlen for å kunne verifisere avsender. Den må også ha en GitHub-token med nødvendige rettigheter til OCI/GHCR-bundlen som podden skal hente.
+
+I den nåværende Accesserator-oppsettet injiseres disse inn i OPA-sidecaren som miljøvariabler:
+
+- `GITHUB_TOKEN` (fra `spec.opa.githubToken`)
+- `OPA_PUBLIC_KEY` (fra `spec.opa.bundlePublicKey`)
 
 ### Eksempel på konfigurasjon
 

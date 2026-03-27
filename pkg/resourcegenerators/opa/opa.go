@@ -2,6 +2,7 @@ package opa
 
 import (
 	_ "embed"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -15,7 +16,7 @@ type OPAConfig struct {
 	Plugins      map[string]EnvoyExtAuthzGrpc `yaml:"plugins"`
 	DecisionLogs DecisionLogs                 `yaml:"decision_logs"`
 	Services     map[string]Service           `yaml:"services"`
-	Bundles      map[string]Bundle            `yaml:"bundles"`
+	Discovery    Discovery                    `yaml:"discovery"`
 	Keys         map[string]Key               `yaml:"keys"`
 }
 
@@ -44,25 +45,36 @@ type Bearer struct {
 }
 
 type Bundle struct {
-	Service  string  `yaml:"service"`
-	Resource string  `yaml:"resource"`
-	Polling  Polling `yaml:"polling"`
-	Signing  Signing `yaml:"signing"`
+	Service  string  `yaml:"service" json:"service"`
+	Resource string  `yaml:"resource" json:"resource"`
+	Polling  Polling `yaml:"polling" json:"polling"`
+	Signing  Signing `yaml:"signing" json:"signing"`
+}
+
+type Discovery struct {
+	Service  string  `yaml:"service" json:"service"`
+	Resource string  `yaml:"resource" json:"resource"`
+	Polling  Polling `yaml:"polling" json:"polling"`
 }
 
 type Polling struct {
-	MinDelaySeconds int `yaml:"min_delay_seconds"`
-	MaxDelaySeconds int `yaml:"max_delay_seconds"`
+	MinDelaySeconds int `yaml:"min_delay_seconds" json:"min_delay_seconds"`
+	MaxDelaySeconds int `yaml:"max_delay_seconds" json:"max_delay_seconds"`
 }
 
 type Signing struct {
-	KeyID string `yaml:"keyid"`
+	KeyID string `yaml:"keyid" json:"keyid"`
 }
 
 type Key struct {
 	Algorithm string       `yaml:"algorithm"`
 	Key       QuotedString `yaml:"key"`
 }
+
+const (
+	opaOCIRegistryServiceName = "oci-registry"
+	opaBundleSigningKeyID     = "bundle-signing"
+)
 
 type QuotedString string
 
@@ -91,8 +103,11 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 		},
 		DecisionLogs: DecisionLogs{Console: true},
 		Services: map[string]Service{
-			"ghcr-registry": {
-				URL:  "https://ghcr.io",
+			"discovery-server": {
+				URL: "http://" + utilities.GetOpaDiscoveryServiceName(scope.SecurityConfig.Spec.ApplicationRef) + "." + scope.SecurityConfig.Namespace + ".svc.cluster.local",
+			},
+			opaOCIRegistryServiceName: {
+				URL:  getOCIServiceURL(scope.OpaConfig.BundleUrl),
 				Type: "oci",
 				Credentials: Credentials{
 					Bearer: Bearer{
@@ -102,21 +117,16 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 				},
 			},
 		},
-		Bundles: map[string]Bundle{
-			"authz": {
-				Service:  "ghcr-registry",
-				Resource: scope.OpaConfig.BundleUrl,
-				Polling: Polling{
-					MinDelaySeconds: 10,
-					MaxDelaySeconds: 30,
-				},
-				Signing: Signing{
-					KeyID: "bundle-verification-key",
-				},
+		Discovery: Discovery{
+			Service:  "discovery-server",
+			Resource: GetOpaDiscoveryResourcePath(),
+			Polling: Polling{
+				MinDelaySeconds: 10,
+				MaxDelaySeconds: 30,
 			},
 		},
 		Keys: map[string]Key{
-			"bundle-verification-key": {
+			opaBundleSigningKeyID: {
 				Algorithm: "RS256",
 				Key:       publicKeyVar,
 			},
@@ -136,4 +146,17 @@ func GetDesired(objectMeta v1.ObjectMeta, scope state.Scope) *corev1.ConfigMap {
 	}
 
 	return configMap
+}
+
+func getOCIServiceURL(bundleRef string) string {
+	parts := strings.SplitN(bundleRef, "/", 2)
+	if len(parts) < 2 || parts[0] == "" {
+		return "https://ghcr.io"
+	}
+	host := strings.TrimPrefix(parts[0], "https://")
+	host = strings.TrimPrefix(host, "http://")
+	if host == "" {
+		return "https://ghcr.io"
+	}
+	return "https://" + host
 }
