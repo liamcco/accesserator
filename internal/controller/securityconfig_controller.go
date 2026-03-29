@@ -65,6 +65,7 @@ func (r *SecurityConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=skiperator.kartverket.no,resources=applications,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nais.io,resources=jwkers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -124,6 +125,23 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Name:      utilities.GetOpaConfigName(securityConfig.Spec.ApplicationRef),
 		Namespace: securityConfig.Namespace,
 	}
+	OpaBundleObjectMeta := metav1.ObjectMeta{
+		Name:      utilities.GetOpaBundleName(securityConfig.Spec.ApplicationRef),
+		Namespace: securityConfig.Namespace,
+	}
+
+	var bundleData []byte
+	if scope.OpaConfig.Enabled {
+		bundleData, err = r.fetchOpaBundle(ctx, securityConfig, *scope)
+		if err != nil {
+			securityConfig.Status.SetPhaseFailed(err.Error())
+			updateErr := r.updateStatusWithRetriesOnConflict(ctx, *securityConfig)
+			if updateErr != nil {
+				return ctrl.Result{}, updateErr
+			}
+			return reconcile.Result{}, err
+		}
+	}
 
 	controllerResources := []reconciliation.ControllerResource{
 		ControllerResourceAdapter[*naisiov1.Jwker]{
@@ -170,6 +188,22 @@ func (r *SecurityConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 					UpdateFields: func(current, desired *corev1.ConfigMap) {
 						current.Data = desired.Data
+					},
+				},
+			},
+		},
+		ControllerResourceAdapter[*corev1.ConfigMap]{
+			reconciliation.ReconcilerAdapter[*corev1.ConfigMap]{
+				Func: reconciliation.ResourceReconciler[*corev1.ConfigMap]{
+					ResourceKind:    "ConfigMap",
+					ResourceName:    OpaBundleObjectMeta.Name,
+					DesiredResource: utilities.Ptr(opa.GetBundleDesired(OpaBundleObjectMeta, *scope, bundleData)),
+					Scope:           scope,
+					ShouldUpdate: func(current, desired *corev1.ConfigMap) bool {
+						return !equality.Semantic.DeepEqual(current.BinaryData, desired.BinaryData)
+					},
+					UpdateFields: func(current, desired *corev1.ConfigMap) {
+						current.BinaryData = desired.BinaryData
 					},
 				},
 			},
@@ -320,8 +354,37 @@ func (r *SecurityConfigReconciler) updateStatus(
 				accesseratorv1alpha.SetConditionFailed(&statusCondition, statusMsg)
 			}
 		} else {
-			securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
-			accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
+			_, getOpaBundleErr := scope.GetOpaBundle(ctx, r.Client)
+			if getOpaBundleErr != nil {
+				rLog.Error(
+					getOpaBundleErr,
+					fmt.Sprintf(
+						"Failed to get Opa bundle resource with name %s when updating SecurityConfig status",
+						utilities.GetOpaBundleName(securityConfig.Spec.ApplicationRef),
+					),
+				)
+				r.Recorder.Eventf(&securityConfig, "Error", "StatusUpdateFailed", "Failed to get Opa bundle resource with name %s.", utilities.GetOpaBundleName(securityConfig.Spec.ApplicationRef))
+				if apierrors.IsNotFound(getOpaBundleErr) {
+					securityConfig.Status.SetPhasePending("SecurityConfig pending due to missing Opa bundle ConfigMap.")
+					statusMsg := fmt.Sprintf(
+						"Opa bundle ConfigMap %s/%s does not exist",
+						securityConfig.Namespace,
+						utilities.GetOpaBundleName(securityConfig.Spec.ApplicationRef),
+					)
+					accesseratorv1alpha.SetConditionPending(&statusCondition, statusMsg)
+				} else {
+					securityConfig.Status.SetPhaseFailed("SecurityConfig failed to fetch Opa bundle ConfigMap.")
+					statusMsg := fmt.Sprintf(
+						"Failed to fetch Opa bundle ConfigMap %s/%s",
+						securityConfig.Namespace,
+						utilities.GetOpaBundleName(securityConfig.Spec.ApplicationRef),
+					)
+					accesseratorv1alpha.SetConditionFailed(&statusCondition, statusMsg)
+				}
+			} else {
+				securityConfig.Status.SetPhaseReady("SecurityConfig ready.")
+				accesseratorv1alpha.SetConditionReady(&statusCondition, "Descendants of SecurityConfig reconciled successfully.")
+			}
 		}
 
 	default:
@@ -391,4 +454,45 @@ func (r *SecurityConfigReconciler) updateStatus(
 			r.Recorder.Eventf(&securityConfig, "Normal", "StatusUpdateSuccess", "Status of SecurityConfig updated successfully.")
 		}
 	}
+}
+
+func (r *SecurityConfigReconciler) fetchOpaBundle(
+	ctx context.Context,
+	securityConfig *accesseratorv1alpha.SecurityConfig,
+	scope state.Scope,
+) ([]byte, error) {
+	secretName := securityConfig.Spec.Opa.GithubToken.Name
+	secretKey := securityConfig.Spec.Opa.GithubToken.Key
+	if secretName == "" || secretKey == "" {
+		return nil, fmt.Errorf("OPA is enabled but githubToken secret name/key is not set")
+	}
+
+	var githubTokenSecret corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      secretName,
+		Namespace: securityConfig.Namespace,
+	}, &githubTokenSecret); err != nil {
+		return nil, fmt.Errorf(
+			"failed to fetch githubToken secret %s/%s: %w",
+			securityConfig.Namespace,
+			secretName,
+			err,
+		)
+	}
+
+	token, exists := githubTokenSecret.Data[secretKey]
+	if !exists || len(token) == 0 {
+		return nil, fmt.Errorf(
+			"githubToken secret %s/%s does not contain a non-empty key %q",
+			securityConfig.Namespace,
+			secretName,
+			secretKey,
+		)
+	}
+
+	bundleData, err := opa.BundleFetcher(ctx, scope.OpaConfig.BundleUrl, string(token))
+	if err != nil {
+		return nil, err
+	}
+	return bundleData, nil
 }

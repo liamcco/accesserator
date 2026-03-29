@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 
+	"github.com/kartverket/accesserator/pkg/resourcegenerators/opa"
 	"github.com/kartverket/accesserator/pkg/utilities"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,8 +36,16 @@ var _ = Describe("SecurityConfig Controller", func() {
 		}
 		securityConfig := &accesseratorv1alpha.SecurityConfig{}
 		application := &v1alpha1.Application{}
+		githubTokenSecretName := "ghcr-token"
+		githubTokenSecretKey := "token"
+		publicKeyConfigMapName := "opa-pubkey"
+		publicKeyConfigMapKey := "public.pem"
 
 		BeforeEach(func() {
+			opa.BundleFetcher = func(_ context.Context, _ string, _ string) ([]byte, error) {
+				return []byte("bundle-bytes"), nil
+			}
+
 			By("creating the dependent Application custom resource")
 			appKey := types.NamespacedName{Name: skiperatorAppName, Namespace: "default"}
 			err := k8sClient.Get(ctx, appKey, application)
@@ -55,6 +64,39 @@ var _ = Describe("SecurityConfig Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
+			By("creating dependencies required for OPA bundle fetch")
+			tokenSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      githubTokenSecretName,
+					Namespace: namespaceName,
+				},
+				Data: map[string][]byte{
+					githubTokenSecretKey: []byte("dummy-token"),
+				},
+			}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: githubTokenSecretName, Namespace: namespaceName}, &corev1.Secret{})
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, tokenSecret)).To(Succeed())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			publicKeyConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      publicKeyConfigMapName,
+					Namespace: namespaceName,
+				},
+				Data: map[string]string{
+					publicKeyConfigMapKey: "public-key",
+				},
+			}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: publicKeyConfigMapName, Namespace: namespaceName}, &corev1.ConfigMap{})
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, publicKeyConfigMap)).To(Succeed())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			By("creating the custom resource for the Kind SecurityConfig")
 			err = k8sClient.Get(ctx, typeNamespacedName, securityConfig)
 			if err != nil && errors.IsNotFound(err) {
@@ -69,6 +111,18 @@ var _ = Describe("SecurityConfig Controller", func() {
 							Enabled:       true,
 							BundlePath:    "ghcr.io/kartverket/taaask-poc",
 							BundleVersion: "latest",
+							GithubToken: corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: githubTokenSecretName,
+								},
+								Key: githubTokenSecretKey,
+							},
+							BundlePublicKey: corev1.ConfigMapKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: publicKeyConfigMapName,
+								},
+								Key: publicKeyConfigMapKey,
+							},
 						},
 					},
 				}
@@ -79,6 +133,8 @@ var _ = Describe("SecurityConfig Controller", func() {
 		})
 
 		AfterEach(func() {
+			opa.BundleFetcher = opa.FetchBundle
+
 			resource := &accesseratorv1alpha.SecurityConfig{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -100,9 +156,19 @@ var _ = Describe("SecurityConfig Controller", func() {
 
 			By("Cleanup the dependant Application resource")
 			Expect(k8sClient.Delete(ctx, skiperatorApp)).To(Succeed())
+
+			secret := &corev1.Secret{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: githubTokenSecretName, Namespace: namespaceName}, secret); err == nil {
+				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+			}
+
+			publicKeyConfigMap := &corev1.ConfigMap{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: publicKeyConfigMapName, Namespace: namespaceName}, publicKeyConfigMap); err == nil {
+				Expect(k8sClient.Delete(ctx, publicKeyConfigMap)).To(Succeed())
+			}
 		})
 
-		It("should create a opa-config when Opa is enabled", func() {
+		It("should create OPA config and bundle ConfigMaps when Opa is enabled", func() {
 			By("Reconciling the SecurityConfig with Opa enabled")
 
 			fakeRecorder := record.NewFakeRecorder(100)
@@ -121,6 +187,16 @@ var _ = Describe("SecurityConfig Controller", func() {
 			}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, opaConfigKey, &opaConfig)
+			}).Should(Succeed())
+
+			By("Verifying that an opa-bundle resource was created")
+			var opaBundle corev1.ConfigMap
+			opaBundleKey := types.NamespacedName{
+				Name:      utilities.GetOpaBundleName(skiperatorAppName),
+				Namespace: namespaceName,
+			}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, opaBundleKey, &opaBundle)
 			}).Should(Succeed())
 
 			By("Verifying that SecurityConfig is PhasePending before OpaConfig is ready")
@@ -157,7 +233,7 @@ var _ = Describe("SecurityConfig Controller", func() {
 			Eventually(fakeRecorder.Events).ShouldNot(Receive(ContainSubstring("ReconcileFailed")))
 		})
 
-		It("should NOT create a OpaConfig resource when Opa is disabled", func() {
+		It("should NOT create OPA ConfigMaps when Opa is disabled", func() {
 			By("Disabling Opa on the SecurityConfig")
 			securityConfig := &accesseratorv1alpha.SecurityConfig{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, securityConfig)).To(Succeed())
@@ -182,6 +258,16 @@ var _ = Describe("SecurityConfig Controller", func() {
 					Name:      utilities.GetOpaConfigName(skiperatorAppName),
 					Namespace: namespaceName,
 				}, &opaConfig)
+				return errors.IsNotFound(err)
+			}).Should(BeTrue())
+
+			By("Verifying that no Opa bundle resource exists")
+			var opaBundle corev1.ConfigMap
+			Consistently(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      utilities.GetOpaBundleName(skiperatorAppName),
+					Namespace: namespaceName,
+				}, &opaBundle)
 				return errors.IsNotFound(err)
 			}).Should(BeTrue())
 

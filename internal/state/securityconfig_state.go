@@ -115,3 +115,18 @@ func (s *Scope) GetOpaConfig(ctx context.Context, k8sClient client.Client) (*cor
 	}
 	return &configMap, nil
 }
+
+func (s *Scope) GetOpaBundle(ctx context.Context, k8sClient client.Client) (*corev1.ConfigMap, error) {
+	var configMap corev1.ConfigMap
+	if k8sClient == nil {
+		return nil, fmt.Errorf("k8sClient not configured")
+	}
+	opaBundleName := utilities.GetOpaBundleName(s.SecurityConfig.Spec.ApplicationRef)
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      opaBundleName,
+		Namespace: s.SecurityConfig.Namespace,
+	}, &configMap); err != nil {
+		return nil, fmt.Errorf("failed to fetch Opa bundle resource named %s: %w", opaBundleName, err)
+	}
+	return &configMap, nil
+}
